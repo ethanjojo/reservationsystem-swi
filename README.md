@@ -10,7 +10,7 @@ rezervace se automaticky potvrdí a následně se požádá notifikační služb
 | Člen | GitHub | Role v C01 změně |
 | --- | --- | --- |
 | Jan Horák | [ethanjojo](https://github.com/ethanjojo) | Autor změny s asistencí Codexu |
-| Člen identifikovaný GitHub účtem stepanrychly | [stepanrychly](https://github.com/stepanrychly) | Člen týmu; profil neuvádí veřejné jméno |
+| Štěpán Rychlý | [stepanrychly](https://github.com/stepanrychly) | Člen týmu |
 | Daniel Krásný | [DanielKrasny](https://github.com/DanielKrasny) | Reviewer před integrací |
 
 [Společný repozitář](https://github.com/ethanjojo/reservationsystem-swi).
