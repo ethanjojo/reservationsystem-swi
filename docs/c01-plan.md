@@ -4,10 +4,10 @@ Schválený rozsah: doména termínů u lékařů, Prisma/Express + Vite/React/s
 Práce probíhá v `codex/c01-engineering-spike`, malé commity a PR do `master`.
 
 - [x] Definovat Project Frame a architektonická rozhodnutí.
-- [ ] Připravit npm workspaces, PostgreSQL a sestavitelný skeleton.
-- [ ] Napsat integrační test create → DB → read → assertions; ověřit selhání před implementací repository.
-- [ ] Implementovat minimální persistence, migraci a typový notification port; spustit test.
-- [ ] Definovat CP1 cestu a zapsat skutečnou evidenci, reprodukci a stav DoD.
+- [x] Připravit npm workspaces, PostgreSQL a sestavitelný skeleton.
+- [x] Napsat integrační test create → DB → read → assertions; ověřit selhání před implementací repository.
+- [x] Implementovat minimální persistence, migraci a typový notification port; spustit test.
+- [x] Definovat CP1 cestu a zapsat skutečnou evidenci, reprodukci a stav DoD.
 - [ ] Ověřit build, typy a testy; připravit GitHub CI a PR.
 - [ ] Druhý člen týmu provede review před integrací; tým doplní členy a integruje změnu.
 

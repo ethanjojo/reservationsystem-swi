@@ -33,3 +33,19 @@ C01: dokumentace domény, sestavitelný skeleton, databázová migrace a skuteč
 CP1: create/confirm cesta, pracovní okna, dostupnost, ochrana překryvu a automatizovaný end-to-end check.
 Další týdny: kompletní UI, autentizace, rušení s 24h pravidlem a skutečné e-maily.
 Future pressure (výjimky z pracovních oken) je samostatně definována, nyní se neimplementuje.
+
+## Stav závislostí při C01
+Zvolena stabilní Prisma 7.10.0; `latest` na npm v době instalace ukazoval Prisma 8 release candidate.
+Dne 15. 9. 2026 `npm audit` hlásil 4 high položky v řetězci Prisma CLI:
+`deepmerge-ts@7.1.5`, `mysql2@3.15.3` a jejich nadřazené balíčky.
+Stejný počet vrátil i `npm audit --omit=dev`; netvrdíme proto čistý production audit.
+
+- [DeepmergeTS — rekurzivní grafy](https://github.com/advisories/GHSA-ggr8-5vv4-36mx)
+- [mysql2 — autentizační downgrade](https://github.com/advisories/GHSA-3f6p-5ww8-9rcr)
+- [mysql2 — dekomprese protokolu](https://github.com/advisories/GHSA-rgwj-5xj2-c3m3)
+
+`npm ls deepmerge-ts mysql2` je zařadil pod Prisma CLI. C01 používá lokální PostgreSQL
+s pg adaptérem a vlastní statickou Prisma konfiguraci; MySQL konektor nepoužívá.
+Automatický návrh `npm audit fix --force` je downgrade Prisma na 6.19.3, který by vyžadoval
+změnu konfigurace projektu. V C01 neprovádíme neověřený major override tranzitivní knihovny
+ani tento downgrade. Před dalším nasazením tým znovu ověří opravenou stabilní Prisma verzi.
