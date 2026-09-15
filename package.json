@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*"],
-  "engines": { "node": ">=24 <25", "npm": ">=11 <12" },
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "packageManager": "npm@11.17.0",
   "scripts": {
     "dev:api": "npm run dev -w @bookerdoc/api",
@@ -13,7 +18,10 @@
     "typecheck": "npm run db:generate && npm run typecheck --workspaces",
     "db:generate": "npm run db:generate -w @bookerdoc/api",
     "db:migrate": "npm run db:migrate -w @bookerdoc/api",
-    "test": "npm run db:generate && node scripts/test-db.mjs"
+    "test": "npm run db:generate && node scripts/test-db.mjs",
+    "db:seed": "npm run db:generate && npm run db:seed -w @bookerdoc/api"
   },
-  "devDependencies": { "dotenv": "^17.0.0" }
+  "devDependencies": {
+    "dotenv": "^17.0.0"
+  }
 }

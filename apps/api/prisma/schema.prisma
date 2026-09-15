@@ -27,6 +27,17 @@ model Doctor {
   name String
   services Service[]
   reservations Reservation[]
+  workingWindows WorkingWindow[]
+}
+
+model WorkingWindow {
+  id String @id @default(uuid()) @db.Uuid
+  doctorId String @db.Uuid
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  weekday Int
+  startMinute Int
+  endMinute Int
+  @@unique([doctorId, weekday, startMinute, endMinute])
 }
 
 model Service {
