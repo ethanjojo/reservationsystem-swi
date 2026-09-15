@@ -29,6 +29,7 @@ pravidlo překryvu, zrušení nejpozději 24 hodin před termínem a notifikačn
 - [Architektura a rozhodnutí](docs/architecture-and-decisions.md)
 - [Evidence spiku a stav všech 15 bodů DoD](docs/evidence-and-evolution.md)
 - [Issue C01 engineering spike](https://github.com/ethanjojo/reservationsystem-swi/issues/1)
+- [Pull request C01](https://github.com/ethanjojo/reservationsystem-swi/pull/2)
 
 ## Technologie a předpoklady
 

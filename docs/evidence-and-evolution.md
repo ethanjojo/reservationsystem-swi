@@ -43,7 +43,8 @@ Tyto části nejsou předmětem C01 spiku a musí dostat vlastní implementaci a
 - Task: [C01 engineering spike #1](https://github.com/ethanjojo/reservationsystem-swi/issues/1).
 - Autor: Jan Horák (`ethanjojo`) s asistencí Codexu.
 - Větev: `codex/c01-engineering-spike` → cílová větev `master`.
-- Reviewer: Daniel Krásný (`DanielKrasny`).
+- Reviewer: Daniel Krásný (`DanielKrasny`), review request odeslán.
+- Pull request: [C01 BookerDoc #2](https://github.com/ethanjojo/reservationsystem-swi/pull/2).
 - Stav: změna připravena pro review; review druhým členem a integrace dosud neproběhly.
 - Po Danielově review a merge tým doplní odkazy na review a merge commit. Agent ani CI
   nemohou tento skutečný týmový krok nahradit.
