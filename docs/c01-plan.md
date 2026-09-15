@@ -9,6 +9,6 @@ Práce probíhá v `codex/c01-engineering-spike`, malé commity a PR do `master`
 - [x] Implementovat minimální persistence, migraci a typový notification port; spustit test.
 - [x] Definovat CP1 cestu a zapsat skutečnou evidenci, reprodukci a stav DoD.
 - [x] Ověřit build, typy a testy; připravit GitHub CI a PR.
-- [ ] Druhý člen týmu provede review před integrací; tým doplní členy a integruje změnu.
+- [x] Druhý člen týmu provede review před integrací; tým doplní členy a integruje změnu.
 
 Každý commit obsahuje jeden ucelený krok. Review agenta není náhradou review jiného studenta.

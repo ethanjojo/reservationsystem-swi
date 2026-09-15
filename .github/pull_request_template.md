@@ -5,10 +5,10 @@ Popište konkrétní problém a výsledné chování.
 Uveďte skutečně spuštěné příkazy a výsledky.
 
 ## Review druhým členem před integrací
-- [ ] Doména a všechny položky Project Frame dávají smysl.
+- [ ] Změna odpovídá schválenému rozsahu a doménovým pravidlům.
 - [ ] Persistence test používá skutečný PostgreSQL a oddělenou testovací DB.
 - [ ] Reviewer prošel změnu a evidenci; případné připomínky jsou vypořádány.
-- [ ] CP1 je definován; C01 nepředstírá hotový rezervační systém.
+- [ ] Implementované a odložené části odpovídají dokumentaci a evidenci.
 - [ ] Review je zaznamenané v GitHubu před merge.
 
-Po integraci doplňte odkaz na review a merge commit do docs/evidence-and-evolution.md.
+Po integraci doplňte odkaz na review a merge commit do evidence příslušné etapy.

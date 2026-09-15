@@ -45,9 +45,9 @@ Tyto části nejsou předmětem C01 spiku a musí dostat vlastní implementaci a
 - Větev: `codex/c01-engineering-spike` → cílová větev `master`.
 - Reviewer: Daniel Krásný (`DanielKrasny`), review request odeslán.
 - Pull request: [C01 BookerDoc #2](https://github.com/ethanjojo/reservationsystem-swi/pull/2).
-- Stav: změna připravena pro review; review druhým členem a integrace dosud neproběhly.
-- Po Danielově review a merge tým doplní odkazy na review a merge commit. Agent ani CI
-  nemohou tento skutečný týmový krok nahradit.
+- Stav: Daniel Krásný změnu schválil 15. 9. 2026 v 11:58:28 UTC a PR byl mergnut v 11:58:41 UTC.
+- [Skutečné Danielovo schválení](https://github.com/ethanjojo/reservationsystem-swi/pull/2#pullrequestreview-5209635261).
+- [Merge commit 77420bc](https://github.com/ethanjojo/reservationsystem-swi/commit/77420bcf074dba6b91bafc7965931ddc90f670ed).
 
 ## Definition of Done před C02
 
@@ -64,12 +64,12 @@ Tyto části nejsou předmětem C01 spiku a musí dostat vlastní implementaci a
 | 9 | 1 boundary | Definováno: Notification Service + TypeScript port |
 | 10 | Kompletní Project Frame | Splněno: intent-and-change.md |
 | 11 | 1 Q/C/R/L pressure | Definováno: C — výjimky z pracovních oken |
-| 12 | Reviewed and integrated change | **Čeká na Danielovo review a následný merge** |
+| 12 | Reviewed and integrated change | Splněno: Danielovo APPROVED a merge PR #2 (odkazy výše) |
 | 13 | 1 executed engineering spike | Splněno: spike A, reálný PostgreSQL test |
 | 14 | Spike evidence + decision | Splněno: tento dokument + RED/GREEN výpisy |
 | 15 | Definovaný CP1 walking skeleton | Definováno v README; runnable až po C03 / před C04 |
 
-Technické výstupy pokrývají 14 z 15 bodů. C01 jako celek není uzavřený, dokud neproběhne bod 12.
+C01 je uzavřený: všech 15 bodů je splněno. Týmová review smyčka je doložena skutečným schválením a merge.
 
 ## Doplňkové ověření skeletonu
 - `npm run typecheck` a `npm run build`: úspěch pro obě workspaces.
