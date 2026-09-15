@@ -1,0 +1,19 @@
+{
+  "name": "bookerdoc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "engines": { "node": ">=24 <25", "npm": ">=11 <12" },
+  "packageManager": "npm@11.17.0",
+  "scripts": {
+    "dev:api": "npm run dev -w @bookerdoc/api",
+    "dev:web": "npm run dev -w @bookerdoc/web",
+    "build": "npm run db:generate && npm run build --workspaces",
+    "typecheck": "npm run db:generate && npm run typecheck --workspaces",
+    "db:generate": "npm run db:generate -w @bookerdoc/api",
+    "db:migrate": "npm run db:migrate -w @bookerdoc/api",
+    "test": "npm run db:generate && node scripts/test-db.mjs"
+  },
+  "devDependencies": { "dotenv": "^17.0.0" }
+}
