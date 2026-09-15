@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReservationStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  email String @unique
+  reservations Reservation[]
+}
+
+model Doctor {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  services Service[]
+  reservations Reservation[]
+}
+
+model Service {
+  id String @id @default(uuid()) @db.Uuid
+  doctorId String @db.Uuid
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  name String
+  durationMinutes Int
+  reservations Reservation[]
+  @@index([doctorId])
+}
+
+model Reservation {
+  id String @id @default(uuid()) @db.Uuid
+  patientId String @db.Uuid
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctorId String @db.Uuid
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  serviceId String @db.Uuid
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  startsAt DateTime @db.Timestamptz(3)
+  endsAt DateTime @db.Timestamptz(3)
+  status ReservationStatus @default(DRAFT)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([doctorId, startsAt])
+  @@index([patientId])
+  @@index([serviceId])
+}
