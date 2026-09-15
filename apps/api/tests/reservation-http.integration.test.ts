@@ -54,6 +54,7 @@ describe("POST /reservations — CP1 HTTP to PostgreSQL", () => {
     { startsAt: "2030-02-30T09:00:00Z" }, { startsAt: "2029-02-04T09:00:00Z" },
     { startsAt: "2030-02-04T15:45:00+01:00" }, { startsAt: "2030-02-05T09:00:00+01:00" },
     { startsAt: "2030-02-04T09:01:00+01:00" }, { startsAt: "2030-02-04T09:00:01+01:00" },
+    { startsAt: "2030-02-04T09:00:00.0009+01:00" },
     { status: "DRAFT" }, { endsAt: "2030-02-04T10:00:00Z" },
   ])("rejects invalid input %j with no write or notification", async patch => {
     await request(app()).post("/reservations").send({ ...payload(), ...patch }).expect(400);
