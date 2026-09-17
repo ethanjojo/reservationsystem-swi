@@ -3,7 +3,11 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required");
-if (new URL(connectionString).pathname !== "/bookerdoc") {
+const databaseUrl = new URL(connectionString);
+const isLocalDatabase =
+  (databaseUrl.hostname === "localhost" || databaseUrl.hostname === "127.0.0.1" || databaseUrl.hostname === "::1") &&
+  databaseUrl.port === "55432";
+if (databaseUrl.pathname !== "/bookerdoc" || !isLocalDatabase) {
   throw new Error("Demo seed is intended only for the local bookerdoc database");
 }
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
