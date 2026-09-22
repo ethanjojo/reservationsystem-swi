@@ -172,6 +172,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     await approve(row.id, "patient").expect(403); await approve(row.id, "other-doctor").expect(403);
     await reject(row.id, "patient").expect(403); await reject(row.id, "other-doctor").expect(403);
     await read(row.id, "other-doctor").expect(403);
+    instant = new Date("2030-01-01T01:00:00Z"); // delayed decision remains valid
     expect((await approve(row.id).expect(200)).body.status).toBe("CONFIRMED");
     expect((await availability().expect(200)).body.available).toBe(false);
     await approve(row.id).expect(409); await reject(row.id).expect(409);
@@ -202,6 +203,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     expect((await read(row.id).expect(200)).body.status).toBe("EXPIRED");
     expect((await db.reservation.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("EXPIRED");
     await approve(row.id).expect(409); await reject(row.id).expect(409); await cancel(row.id).expect(409);
+    expect((await availability().expect(200)).body.available).toBe(true);
     expect(delivered).toHaveLength(0);
   });
   it.each(["approve", "reject", "cancel", "confirm"])("REQ-11: %s commits expiry despite returning 409", async operation => {

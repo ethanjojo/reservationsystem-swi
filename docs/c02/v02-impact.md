@@ -17,7 +17,7 @@ Datum: 2026-09-22. Výchozí neměnný snapshot: `c02-v0.1`, PR #5. Tento dokume
 | --- | --- |
 | BR-01/02 výlučnost, výpočet času | zachováno: blokuje pouze CONFIRMED; půlotevřený interval, snapshot trvání |
 | BR-03 zrušení | rozšíření o platné PENDING_APPROVAL; terminální REJECTED/EXPIRED nelze změnit |
-| BR-04/05 identita, konzistence | rozšíření o oprávnění vlastnícího lékaře a souběh Approve/Reject/Cancel/Expire |
+| BR-05/06 identita, konzistence | rozšíření o oprávnění vlastnícího lékaře a souběh Approve/Reject/Cancel/Expire |
 | Create, Availability | beze změny požadovaného chování |
 | Confirm | větvení podle zdroje; nové deadline a stav; u žádosti bez notifikace |
 | Cancel | zrušení čekající žádosti, kontrola vypršení |

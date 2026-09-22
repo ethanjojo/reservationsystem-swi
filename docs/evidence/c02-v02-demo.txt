@@ -1,0 +1,32 @@
+
+> bookerdoc@0.1.0 demo:c02
+> node --env-file=.env scripts/demo-c02.mjs
+
+GET /availability -> 200 true
+POST /reservations -> 400 INVALID_INPUT
+GET /availability -> 400 INVALID_INPUT
+POST /reservations -> 201 DRAFT
+GET /availability -> 200 true
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/confirm -> 200 PENDING_APPROVAL
+GET /availability -> 200 true
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/confirm -> 409 INVALID_STATE
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/approve -> 403 FORBIDDEN
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/approve -> 200 CONFIRMED
+GET /availability -> 200 false
+POST /reservations -> 201 DRAFT
+POST /reservations/22430674-0080-4dc8-bc81-c48419cf1747/confirm -> 200 PENDING_APPROVAL
+POST /reservations/22430674-0080-4dc8-bc81-c48419cf1747/approve -> 409 RESERVATION_CONFLICT
+GET /reservations/22430674-0080-4dc8-bc81-c48419cf1747 -> 200 PENDING_APPROVAL
+POST /reservations/22430674-0080-4dc8-bc81-c48419cf1747/reject -> 200 REJECTED
+POST /reservations/22430674-0080-4dc8-bc81-c48419cf1747/approve -> 409 INVALID_STATE
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/cancel -> 200 CANCELLED
+GET /availability -> 200 true
+POST /reservations/350c36a7-f527-428d-af31-ef3b64860ce2/cancel -> 200 CANCELLED
+POST /reservations/00000000-0000-4000-8000-000000000098/cancel -> 404 RESERVATION_NOT_FOUND
+POST /reservations -> 201 DRAFT
+POST /reservations/9a568d24-f844-4f12-8954-1ef29837f265/confirm -> 200 PENDING_APPROVAL
+POST /reservations/9a568d24-f844-4f12-8954-1ef29837f265/cancel -> 200 CANCELLED
+C02 v0.2: base operations, approval, rejection and conflict demonstrated successfully. Exact expiry is demonstrated by npm test.
+GET /reservations/350c36a7-f527-428d-af31-ef3b64860ce2 -> 200 CANCELLED
+GET /reservations/22430674-0080-4dc8-bc81-c48419cf1747 -> 200 REJECTED
+GET /reservations/9a568d24-f844-4f12-8954-1ef29837f265 -> 200 CANCELLED
