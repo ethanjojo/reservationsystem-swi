@@ -1,191 +1,91 @@
-# BookerDoc
+# BookerDoc — C02 baseline v0.1
 
-Školní rezervační systém pro termíny u lékařů. Pacient vybere službu a dostupný začátek,
-rezervace se automaticky potvrdí a následně se požádá notifikační služba o e-mail.
-
-## Tým a repozitář
-
-**BookerDoc — 3 členové:**
-
-| Člen | GitHub | Role v C01 změně |
-| --- | --- | --- |
-| Jan Horák | [ethanjojo](https://github.com/ethanjojo) | Autor změny s asistencí Codexu |
-| Štěpán Rychlý | [stepanrychly](https://github.com/stepanrychly) | Člen týmu |
-| Daniel Krásný | [DanielKrasny](https://github.com/DanielKrasny) | Reviewer před integrací |
-
+Rezervace termínů u lékařů. Tým: **Jan Horák** ([ethanjojo](https://github.com/ethanjojo)),
+**Štěpán Rychlý** ([stepanrychly](https://github.com/stepanrychly)), **Daniel Krásný** ([DanielKrasny](https://github.com/DanielKrasny)).
 [Společný repozitář](https://github.com/ethanjojo/reservationsystem-swi).
-Všichni tři mají podle GitHub collaborators API přístup k zápisu (ověřeno 15. 9. 2026).
 
-## Aktuální stav — CP1
+## Specifikace a schválení
 
-C01 je uzavřený včetně Danielova review a merge. CP1 nyní implementuje runnable cestu
-`POST /reservations` → validace → CONFIRMED v PostgreSQL → notifikační stub → HTTP 201.
-Databáze chrání před překryvem i při souběžných požadavcích. Lékařova pracovní okna
-jsou modelovaná a lokální demo seed vloží služby a pracovní dobu.
+- [Úplná baseline v0.1, pravidla, přijetí požadavků a diagramy](docs/c02/v01.md).
+- [Evidence C01/C02](docs/evidence-and-evolution.md).
+- [Historická CP1 evidence](docs/cp1-evidence.md) a [architektonická rozhodnutí](docs/architecture-and-decisions.md).
+- Zadavatel odsouhlasil navrženou politiku; **týmové schválení baseline se provede explicitním review tohoto PR**.
 
-Frontend zatím zůstává úvodní stránkou. Formulář, endpoint pro dostupné začátky,
-rušení a skutečné e-maily budou v dalších PR. API běží lokálně bez autentizace;
-pro CP1 používejte syntetická data.
+C02 odděluje Create (DRAFT) a Confirm (CONFIRMED). DRAFT neblokuje čas a Create ignoruje kolize.
+Automatické objednání = dvě po sobě jdoucí operace bez lidského schvalování, ne samostatná operace Approve.
+Tato verze vědomě mění původní POST kontrakt CP1; staré curl ukázky z CP1 evidence jsou historické.
 
-- [Project Frame a pravidla](docs/intent-and-change.md)
-- [Architektura a rozhodnutí](docs/architecture-and-decisions.md)
-- [Uzavřená evidence C01 — 15/15 bodů](docs/evidence-and-evolution.md)
-- [CP1 specifikace a plán](docs/plans/cp1.md)
-- [CP1 evidence](docs/cp1-evidence.md)
-- [C01 issue #1](https://github.com/ethanjojo/reservationsystem-swi/issues/1) a [PR #2](https://github.com/ethanjojo/reservationsystem-swi/pull/2)
+## Spuštění
 
-## Technologie a předpoklady
-
-Node.js **24.x**, npm **11.x**, Docker s pluginem Compose v2 a běžícím enginem.
-Přesné JS verze jsou v package-lock.json; používejte `npm ci`.
-Prisma 7.10, Express 5, PostgreSQL 17.9, React 19, Vite 8 a shadcn/ui.
-TypeScript sdílí jazyk backendu a frontendu; tým si podporu tohoto stacku zajišťuje sám.
-Známé výstupy auditu závislostí a jejich limit popisuje [stav závislostí](docs/architecture-and-decisions.md#stav-závislostí-při-c01).
-
-## Spuštění z čistého checkoutu
-
-Příkazy provádějte v kořeni repozitáře. Zkopírujte `.env.example` do `.env` (obsahuje pouze
-lokální vývojové přihlašovací údaje). Existující `.env` nepřepisujte.
+Node 24.x, npm 11.x, Docker Compose v2 s běžícím enginem. Stack: Express/Prisma/PostgreSQL + Vite/React/shadcn.
 
 ```bash
 npm ci
 cp .env.example .env
+# Existující .env nepřepisujte: doplňte nové DEMO_* proměnné z .env.example.
 docker compose up -d --wait
-npm run db:generate
 npm run db:migrate
 npm run db:seed
-npm run typecheck
 npm test
+npm run typecheck
 npm run build
+npm run start -w @bookerdoc/api
 ```
 
-`db:migrate` aplikuje verzované migrace do vývojové DB; `npm test` sám aplikuje stejné migrace
-pouze do testovací DB a spustí integrační test. Testy používají syntetická data s unikátními UUID a skutečné HTTP/DB scénáře.
-V `finally` uklidí jen vlastní data; nepoužívají reset ani mazání všech tabulek.
-`db:seed` je pro ruční demo; testy jej nepotřebují a žádný e-mailový účet není potřeba.
+API poslouchá pouze na 127.0.0.1:3000 (lze změnit PORT). Starší proces na portu nejdřív ukončete.
+Frontend lze spustit `npm run dev:web`; zůstává statickým skeletonem, C02 se předvádí API.
+Na macOS bez Docker v PATH: `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"`.
+Vývojová DB localhost:55432/bookerdoc; oddělená testovací DB localhost:55433/bookerdoc_test.
+Testovací runner hlídá název a odlišný cíl DB, migruje a uklízí jen vlastní syntetická data.
+`docker compose down` zachová vývojový volume, testovací tmpfs zanikne; nepřidávejte `--volumes` pro běžné zastavení.
+Prisma SQL migrace vynucují CHECK a exclusion constraint; nenahrazujte je `db push`.
 
-V samostatných terminálech:
+## Identita a oprávnění
+
+`.env.example` obsahuje veřejné **lokální demo klíče**, nikoli produkční přihlášení.
+DEMO_PATIENT_TOKEN server mapuje na pacienta `00000000-0000-4000-8000-000000000001`,
+DEMO_DOCTOR_TOKEN na lékaře `00000000-0000-4000-8000-000000000002`.
+Klíče nesmějí být stejné. Chybějící/nesprávný bearer klíč → 401, nesprávná role/vlastník → 403.
+Klient nemůže získat oprávnění pouhým zasláním patientId/doctorId ani přepsat serverový čas.
+
+## Reprodukovatelná demonstrace
+
+Ve druhém terminálu se stejnou `.env`:
 
 ```bash
-npm run dev:api
+npm run demo:c02
+# Pro jiný port:
+API_BASE_URL=http://localhost:3130 npm run demo:c02
 ```
 
-```bash
-npm run dev:web
-```
+Skript vybere volný termín následujícího pondělí, předvede úspěšné i negativní Create/Availability/Confirm/Cancel,
+ukáže kolizi a uvolnění času. Vytvořené řádky nakonec zruší a zachová historii. Testy navíc ověřují přesnou hranici 24h,
+souběh, oprávnění a časové přechody bez čekání reálných hodin. `npm test` spouští skutečné HTTP/DB testy s řízenými hodinami.
 
-API: `http://localhost:3000/health`, odpověď `{"status":"ok","service":"bookerdoc-api"}`.
-Web: `http://localhost:5173` (při obsazeném portu viz výpis Vite).
-Health endpoint ověřuje běh procesu, nikoli spojení s databází.
+## HTTP kontrakt v0.1
 
-Produkční sestavení API lokálně spustíte `npm run start -w @bookerdoc/api`;
-web zobrazíte přes `npm run preview -w @bookerdoc/web`.
+Vše kromě `/health` vyžaduje `Authorization: Bearer <demo klíč>`.
 
-### Databáze a konfigurace
+| Metoda/cesta | Vstup | Výsledek |
+|---|---|---|
+| POST /reservations | patientId, doctorId, serviceId, startsAt | 201 DRAFT |
+| GET /availability | query doctorId, serviceId, startsAt | 200 available + startsAt/endsAt, beze změny dat |
+| GET /reservations/:id | vlastní ID (nebo vlastní lékař) | 200 aktuální rezervace |
+| POST /reservations/:id/confirm | prázdné tělo | 200 CONFIRMED; 409 kolize/neplatný stav |
+| POST /reservations/:id/cancel | prázdné tělo | 200 CANCELLED; 409 pozdní zrušení |
 
-| Proměnná / služba | Použití |
-| --- | --- |
-| DATABASE_URL / db | Vývojová DB `bookerdoc`, localhost:55432, persistentní Docker volume |
-| TEST_DATABASE_URL / db-test | DB `bookerdoc_test`, localhost:55433, dočasný tmpfs |
-| PORT | Express port, výchozí 3000 |
+Rezervace v odpovědi: id, status, startsAt, endsAt. Intervaly jsou [start,end), čas v ISO s offsetem/Z,
+nejvýše 3 desetinná místa; začátek na celé minutě a 15min mřížce relativní k pracovnímu oknu.
+Jediným normativním zdrojem politik je [BR-01 až BR-07 ve specifikaci](docs/c02/v01.md).
 
-Lokální Compose heslo je pouze pro lokální vývoj; porty DB jsou vázané na 127.0.0.1.
-Testovací runner odmítne chybějící URL, jiný název DB nebo stejný DB cíl jako DATABASE_URL.
-CLI bere `.env` z kořene projektu; proměnné z prostředí mají přednost (například v CI).
+Další chyby: 400 INVALID_INPUT / START_MUST_BE_FUTURE / SERVICE_DOCTOR_MISMATCH / OUTSIDE_WORKING_WINDOW,
+401 UNAUTHORIZED, 403 FORBIDDEN, 404 RESOURCE_NOT_FOUND / RESERVATION_NOT_FOUND,
+409 INVALID_STATE / RESERVATION_CONFLICT / CANCELLATION_TOO_LATE, 413 PAYLOAD_TOO_LARGE, 500 INTERNAL_ERROR.
+Validní availability mimo pracovní okno vrací false. Notifikace po Confirm je pouze stub; její chyba potvrzení nevrací.
 
-`docker compose stop` zastaví služby. `docker compose down` odstraní kontejnery a testovací data,
-ale zachová vývojový volume. Nepřidávejte `--volumes`, pokud chcete zachovat vývojová data.
+## Review a omezení
 
-Na tomto macOS je Docker CLI v `/Applications/Docker.app/Contents/Resources/bin`.
-Pokud shell nenajde `docker` nebo `docker-credential-desktop`, přidejte tuto složku do PATH:
-
-```bash
-export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
-```
-
-Pokud porty 55432/55433 používá jiná aplikace, upravte Compose i odpovídající URL v `.env`.
-
-## Struktura
-
-```text
-apps/api/src/                  Express, persistence repository, notification port
-apps/api/prisma/               Model a verzované migrace
-apps/api/tests/                HTTP/DB integrační testy a časová pravidla
-apps/web/src/                  React a shadcn komponenty
-scripts/test-db.mjs            Bezpečné spuštění migrace a testu nad testovací DB
-docs/                         Project Frame, architektura, evidence
-.github/workflows/ci.yml       Typy, build a test proti PostgreSQL
-```
-
-## CP1 walking skeleton — runnable
-
-Po výše uvedeném spuštění DB, migrací, seedu a API:
-
-```bash
-curl -i http://localhost:3000/reservations \
-  -H 'Content-Type: application/json' \
-  --data '{"patientId":"00000000-0000-4000-8000-000000000001","doctorId":"00000000-0000-4000-8000-000000000002","serviceId":"00000000-0000-4000-8000-000000000003","startsAt":"2030-02-04T09:00:00+01:00"}'
-```
-
-Očekává se HTTP **201**:
-
-```json
-{
-  "id": "vygenerované UUID",
-  "status": "CONFIRMED",
-  "startsAt": "2030-02-04T08:00:00.000Z",
-  "endsAt": "2030-02-04T08:30:00.000Z"
-}
-```
-
-Demo lékař pracuje pondělí–pátek 08:00–16:00 v Europe/Prague; konzultace trvá 30 minut.
-Seed je opakovatelný, již existující demo záznamy ani rezervace nepřepisuje.
-Datum požadavku musí být budoucí pracovní den. Opakování stejného požadavku vrátí **409**;
-pro druhou platnou rezervaci změňte začátek například na 09:30.
-
-```text
-POST /reservations
-→ strict UUID/ISO vstup, načíst pacienta, lékaře a jeho službu
-→ ověřit budoucí začátek na 15min mřížce od začátku okna
-→ vypočítat konec podle délky služby, celý interval musí ležet v jednom okně
-→ v transakci uložit CONFIRMED, DB exclusion constraint odmítne překryv
-→ po commitu požádat stub o notifikaci
-→ HTTP 201 + id/stav/časové okamžiky
-→ npm test ověří HTTP odpověď i skutečně uloženou rezervaci
-```
-
-Notifikační stub vypíše `notification_stub_accepted` a ID rezervace; e-mail neodesílá
-ani neloguje jeho obsah. Selhání stubu vypíše `notification_failed`, rezervace zůstane potvrzená
-s HTTP 201. Trvalé retry/outbox a skutečný poskytovatel zatím nejsou implementované.
-
-### HTTP kontrakt
-
-Vstup musí mít přesně patientId, doctorId, serviceId a startsAt (ISO s offsetem/Z, nejvýše 3 desetinná místa sekund).
-Začátek musí mít celé minuty; začátky počítáme po 15 minutách od začátku pracovního okna.
-Délka služby je 1–1440 uplynulých minut, včetně změn letního času. Intervaly jsou [start,end).
-
-| HTTP | error.code | Příčina |
-| --- | --- | --- |
-| 201 | — | Potvrzeno a uloženo |
-| 400 | INVALID_INPUT | Chybné UUID/ISO/JSON nebo nadbytečná/chybějící pole |
-| 400 | START_MUST_BE_FUTURE | Začátek v minulosti nebo právě teď |
-| 400 | SERVICE_DOCTOR_MISMATCH | Služba nepatří lékaři |
-| 400 | OUTSIDE_WORKING_WINDOW | Čas, délka nebo 15min mřížka nevyhovuje oknu |
-| 404 | RESOURCE_NOT_FOUND | Pacient, lékař nebo služba neexistuje |
-| 409 | RESERVATION_CONFLICT | Překryv potvrzených rezervací stejného lékaře |
-| 413 | PAYLOAD_TOO_LARGE | JSON přes 16 kB |
-| 500 | INTERNAL_ERROR | Neočekávaná chyba; interní detail se neposílá klientovi |
-
-### Migrace a souběh
-
-`db:migrate` potřebuje oprávnění vytvořit PostgreSQL extension `btree_gist` (lokální Compose
-uživatel je má). Exclusion a CHECK constraints jsou v SQL migraci; Prisma schema je neumí
-plně vyjádřit. Používejte migrace, nikoli `prisma db push` jako náhradu.
-Pokud už DB obsahuje neplatné intervaly nebo překryvy, nová migrace správně selže;
-data se nemažou ani neopravují automaticky. Před migrací opravte nekonzistenci řízeně.
-
-## Change + review smyčka
-
-C01 PR #2 byl schválen Danielem Krásným a integrován do master; odkazy jsou v C01 evidenci.
-CP1 se připravuje samostatně ve větvi `codex/cp1-reservation-flow` po malých commitech.
-Nový PR opět vyžaduje review jiným členem před merge. Technické review agenta není týmové schválení.
+PR v0.1 navazuje na otevřené CP1 PR #4. Nejprve integrujte CP1, potom v0.1; následné v0.2 bude mít samostatný diff.
+C01 je uzavřený, znovu ho nevytváříme. Baseline v0.1 bude zachována tagem `c02-v0.1`; tag značí reprodukovatelnou verzi aplikace, ne fingované schválení týmem.
+Produkční autentizace, UI, skutečné e-maily a garance doručení nejsou v rozsahu C02.
+Známé auditní položky Prisma z C01 jsou popsané v architektonických rozhodnutích a tímto PR se neřeší.
