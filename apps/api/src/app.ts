@@ -10,7 +10,8 @@ export interface AppDependencies {
   db: PrismaClient; notifications: NotificationService; now?: () => Date;
   actors?: ReadonlyMap<string, Actor>; logger?: Pick<Console, "warn" | "error">;
 }
-function output(row: Reservation) { return { id: row.id, status: row.status, startsAt: row.startsAt, endsAt: row.endsAt }; }
+function output(row: Reservation) { return { id: row.id, status: row.status, startsAt: row.startsAt, endsAt: row.endsAt,
+  approvalRequestedAt: row.approvalRequestedAt, approvalExpiresAt: row.approvalExpiresAt }; }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new ReservationError(400, "INVALID_INPUT");
@@ -34,9 +35,9 @@ export function createApp({ db, notifications, now = () => new Date(), actors = 
     actor(req); res.json(await checkAvailability(db, parse(availabilityInput, req.query), now));
   });
   app.get("/reservations/:id", async (req, res) => {
-    const identity = actor(req); res.json(output(await readReservation(db, parse(z.uuid(), req.params.id), identity)));
+    const identity = actor(req); res.json(output(await readReservation(db, parse(z.uuid(), req.params.id), identity, now)));
   });
-  for (const operation of ["confirm", "cancel"] as const) {
+  for (const operation of ["confirm", "cancel", "approve", "reject"] as const) {
     app.post(`/reservations/:id/${operation}`, async (req, res) => {
       const identity = actor(req); parse(z.strictObject({}), req.body ?? {});
       const result = await changeReservation(db, parse(z.uuid(), req.params.id), identity, operation, now);
