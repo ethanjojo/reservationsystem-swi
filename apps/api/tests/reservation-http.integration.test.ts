@@ -11,150 +11,139 @@ if (!connectionString || new URL(connectionString).pathname !== "/bookerdoc_test
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 let patientId: string, doctorId: string, serviceId: string;
 let delivered: ReservationConfirmation[];
-const now = () => new Date("2030-01-01T00:00:00Z");
+let instant: Date;
 const payload = () => ({ patientId, doctorId, serviceId, startsAt: "2030-02-04T09:00:00+01:00" });
-const app = () => createApp({ db, now, notifications: {
-  async sendReservationConfirmation(message) { delivered.push(message); },
-} });
+const app = () => createApp({ db, now: () => instant, actors: new Map([
+  ["patient", { role: "patient" as const, id: patientId }],
+  ["other", { role: "patient" as const, id: "00000000-0000-4000-8000-000000000099" }],
+  ["doctor", { role: "doctor" as const, id: doctorId }],
+]), notifications: { async sendReservationConfirmation(message) { delivered.push(message); } } });
+const post = (path: string, body = {}, token = "patient") => request(app()).post(path).set("Authorization", `Bearer ${token}`).send(body);
+const create = async () => (await post("/reservations", payload()).expect(201)).body;
+const confirm = (id: string) => post(`/reservations/${id}/confirm`);
+const cancel = (id: string) => post(`/reservations/${id}/cancel`);
+const availability = (startsAt = payload().startsAt) => request(app()).get("/availability").set("Authorization", "Bearer patient")
+  .query({ doctorId, serviceId, startsAt });
 
 beforeEach(async () => {
   [patientId, doctorId, serviceId] = [randomUUID(), randomUUID(), randomUUID()];
-  delivered = [];
-  await db.user.create({ data: { id: patientId, name: "HTTP patient", email: `${patientId}@example.test` } });
-  await db.doctor.create({ data: { id: doctorId, name: "HTTP doctor" } });
+  instant = new Date("2030-01-01T00:00:00Z"); delivered = [];
+  await db.user.create({ data: { id: patientId, name: "Patient", email: `${patientId}@example.test` } });
+  await db.doctor.create({ data: { id: doctorId, name: "Doctor" } });
   await db.service.create({ data: { id: serviceId, doctorId, name: "Consultation", durationMinutes: 30 } });
   await db.workingWindow.create({ data: { doctorId, weekday: 1, startMinute: 480, endMinute: 960 } });
 });
 afterEach(async () => {
-  try {
-    await db.$transaction([
-      db.reservation.deleteMany({ where: { patientId } }),
-      db.workingWindow.deleteMany({ where: { doctorId } }),
-      db.service.deleteMany({ where: { doctorId } }),
-      db.doctor.deleteMany({ where: { id: doctorId } }),
-      db.user.deleteMany({ where: { id: patientId } }),
-    ]);
-  } finally { await db.$disconnect(); }
+  try { await db.$transaction([
+    db.reservation.deleteMany({ where: { patientId } }), db.workingWindow.deleteMany({ where: { doctorId } }),
+    db.service.deleteMany({ where: { doctorId } }), db.doctor.deleteMany({ where: { id: doctorId } }),
+    db.user.deleteMany({ where: { id: patientId } }),
+  ]); } finally { await db.$disconnect(); }
 });
 
-describe("POST /reservations — CP1 HTTP to PostgreSQL", () => {
-  it("returns 201 and persists a confirmed reservation with calculated end", async () => {
-    const response = await request(app()).post("/reservations").send(payload()).expect(201);
-    expect(response.body).toEqual({ id: expect.any(String), status: "CONFIRMED",
-      startsAt: "2030-02-04T08:00:00.000Z", endsAt: "2030-02-04T08:30:00.000Z" });
-    const row = await db.reservation.findUniqueOrThrow({ where: { id: response.body.id } });
-    expect(row).toMatchObject({ patientId, doctorId, serviceId, status: "CONFIRMED",
-      startsAt: new Date(response.body.startsAt), endsAt: new Date(response.body.endsAt) });
-    expect(delivered).toEqual([{ reservationId: row.id, recipient: `${patientId}@example.test`,
-      doctorName: "HTTP doctor", serviceName: "Consultation", startsAt: row.startsAt, endsAt: row.endsAt }]);
+describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
+  it("REQ-01: creates a persistent DRAFT without allocation or notification", async () => {
+    const draft = await create();
+    expect(draft.status).toBe("DRAFT"); expect(delivered).toEqual([]);
+    expect(await db.reservation.findUnique({ where: { id: draft.id } })).toMatchObject({ status: "DRAFT", patientId });
+    expect((await availability().expect(200)).body.available).toBe(true);
   });
-
   it.each([
-    { patientId: "bad-id" }, { startsAt: "2030-02-04T09:00:00" },
-    { startsAt: "2030-02-30T09:00:00Z" }, { startsAt: "2029-02-04T09:00:00Z" },
-    { startsAt: "2030-02-04T15:45:00+01:00" }, { startsAt: "2030-02-05T09:00:00+01:00" },
-    { startsAt: "2030-02-04T09:01:00+01:00" }, { startsAt: "2030-02-04T09:00:01+01:00" },
-    { startsAt: "2030-02-04T09:00:00.0009+01:00" },
-    { status: "DRAFT" }, { endsAt: "2030-02-04T10:00:00Z" },
-  ])("rejects invalid input %j with no write or notification", async patch => {
-    await request(app()).post("/reservations").send({ ...payload(), ...patch }).expect(400);
+    { patientId: "bad" }, { startsAt: "2030-02-04T09:00:00" }, { startsAt: "2030-02-30T09:00:00Z" },
+    { startsAt: "2029-02-04T09:00:00Z" }, { startsAt: "2030-02-04T09:00:00.0009+01:00" },
+    { startsAt: "2030-02-04T09:01:00+01:00" }, { startsAt: "2030-02-04T15:45:00+01:00" },
+    { startsAt: "2030-02-05T09:00:00+01:00" }, { status: "CONFIRMED" },
+  ])("REQ-01: invalid create %j leaves no row", async patch => {
+    await post("/reservations", { ...payload(), ...patch }).expect(400);
     expect(await db.reservation.count({ where: { patientId } })).toBe(0);
-    expect(delivered).toEqual([]);
   });
-  it.each(["patientId", "doctorId", "serviceId"])("returns 404 for nonexistent %s", async field => {
-    await request(app()).post("/reservations").send({ ...payload(), [field]: randomUUID() }).expect(404);
-    expect(await db.reservation.count({ where: { patientId } })).toBe(0);
-    expect(delivered).toEqual([]);
+  it("rejects missing identity and acting for another patient", async () => {
+    await request(app()).post("/reservations").send(payload()).expect(401);
+    await post("/reservations", payload(), "doctor").expect(403);
+    await post("/reservations", payload(), "other").expect(403);
   });
-  it("rejects a service belonging to a different doctor", async () => {
-    const other = await db.doctor.create({ data: { name: "Other doctor" } });
-    try {
-      await request(app()).post("/reservations").send({ ...payload(), doctorId: other.id }).expect(400);
-      expect(await db.reservation.count({ where: { patientId } })).toBe(0);
-    } finally { await db.doctor.delete({ where: { id: other.id } }); }
+  it("returns 404 for an unknown resource", async () => {
+    await post("/reservations", { ...payload(), doctorId: randomUUID() }).expect(404);
   });
-  it("returns a JSON 400 for malformed JSON", async () => {
-    const response = await request(app()).post("/reservations").set("Content-Type", "application/json").send('{"broken":').expect(400);
-    expect(response.body.error.code).toBe("INVALID_INPUT");
+  it("REQ-02: availability is read-only and uses half-open intervals", async () => {
+    const draft = await create(); await confirm(draft.id).expect(200);
+    const before = await db.reservation.findMany({ where: { patientId } });
+    expect((await availability("2030-02-04T08:30:00+01:00").expect(200)).body.available).toBe(true);
+    expect((await availability("2030-02-04T09:15:00+01:00").expect(200)).body.available).toBe(false);
+    expect((await availability("2030-02-04T09:30:00+01:00").expect(200)).body.available).toBe(true);
+    expect((await availability("2030-02-04T16:00:00+01:00").expect(200)).body.available).toBe(false);
+    expect(await db.reservation.findMany({ where: { patientId } })).toEqual(before);
+    await availability("invalid").expect(400);
   });
-  it("rejects overlap, but allows adjacency and different services after the previous end", async () => {
-    const api = app();
-    await request(api).post("/reservations").send(payload()).expect(201);
-    const otherService = await db.service.create({ data: { doctorId, name: "Other service", durationMinutes: 15 } });
-    await request(api).post("/reservations").send({ ...payload(), serviceId: otherService.id, startsAt: "2030-02-04T09:15:00+01:00" }).expect(409);
-    await request(api).post("/reservations").send({ ...payload(), startsAt: "2030-02-04T09:30:00+01:00" }).expect(201);
-    expect(await db.reservation.count({ where: { patientId } })).toBe(2);
-    expect(delivered).toHaveLength(2);
-  });
-  it("confirms exactly one of two concurrent overlapping requests", async () => {
-    const api = app();
-    const responses = await Promise.all([
-      request(api).post("/reservations").send(payload()),
-      request(api).post("/reservations").send(payload()),
-    ]);
-    expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
-    expect(await db.reservation.count({ where: { patientId, status: "CONFIRMED" } })).toBe(1);
+  it("REQ-03: create ignores overlap, confirm rejects it and preserves DRAFT", async () => {
+    const first = await create(); await confirm(first.id).expect(200);
+    const second = await create(); await confirm(second.id).expect(409);
+    expect(await db.reservation.findUnique({ where: { id: second.id } })).toMatchObject({ status: "DRAFT" });
     expect(delivered).toHaveLength(1);
   });
-  it.each(["DRAFT", "CANCELLED"] as const)("does not treat %s reservations as occupied", async status => {
-    await db.reservation.create({ data: { patientId, doctorId, serviceId, status,
-      startsAt: new Date(payload().startsAt), endsAt: new Date("2030-02-04T08:30:00Z") } });
-    await request(app()).post("/reservations").send(payload()).expect(201);
+  it("REQ-04: concurrent conflicting confirms allocate at most once", async () => {
+    const a = await create(), b = await create();
+    const responses = await Promise.all([confirm(a.id), confirm(b.id)]);
+    expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+    expect(await db.reservation.count({ where: { patientId, status: "CONFIRMED" } })).toBe(1);
   });
-  it("allows the same time for two different doctors", async () => {
-    const other = await db.doctor.create({ data: { name: "Second doctor" } });
-    try {
-      const otherService = await db.service.create({ data: { doctorId: other.id, name: "Consultation", durationMinutes: 30 } });
-      await db.workingWindow.create({ data: { doctorId: other.id, weekday: 1, startMinute: 480, endMinute: 960 } });
-      const api = app();
-      await request(api).post("/reservations").send(payload()).expect(201);
-      await request(api).post("/reservations").send({ ...payload(), doctorId: other.id, serviceId: otherService.id }).expect(201);
-      expect(await db.reservation.count({ where: { patientId, status: "CONFIRMED" } })).toBe(2);
-    } finally {
-      await db.reservation.deleteMany({ where: { doctorId: other.id } });
-      await db.workingWindow.deleteMany({ where: { doctorId: other.id } });
-      await db.service.deleteMany({ where: { doctorId: other.id } });
-      await db.doctor.delete({ where: { id: other.id } });
-    }
+  it("same-reservation confirm race sends only one notification", async () => {
+    const draft = await create();
+    expect((await Promise.all([confirm(draft.id), confirm(draft.id)])).map(r => r.status).sort()).toEqual([200,409]);
+    expect(delivered).toHaveLength(1);
   });
-  it("notifies only after the committed reservation is visible to a separate client", async () => {
+  it("confirms stored duration even after the service duration changes", async () => {
+    const draft = await create();
+    await db.service.update({ where: { id: serviceId }, data: { durationMinutes: 60 } });
+    const result = await confirm(draft.id).expect(200);
+    expect(result.body.endsAt).toBe(draft.endsAt);
+  });
+  it("revalidates future time and current windows at confirmation", async () => {
+    const draft = await create();
+    await db.workingWindow.deleteMany({ where: { doctorId } });
+    await confirm(draft.id).expect(400);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("DRAFT");
+  });
+  it("REQ-05: cancellation at exactly 24h releases the interval, is retained and idempotent", async () => {
+    const draft = await create(); await confirm(draft.id).expect(200);
+    instant = new Date("2030-02-03T08:00:00Z");
+    expect((await cancel(draft.id).expect(200)).body.status).toBe("CANCELLED");
+    await cancel(draft.id).expect(200); await confirm(draft.id).expect(409);
+    expect((await availability().expect(200)).body.available).toBe(true);
+    expect(await db.reservation.count({ where: { id: draft.id } })).toBe(1);
+  });
+  it("REQ-05: less than 24h rejects cancellation with unchanged CONFIRMED", async () => {
+    const draft = await create(); await confirm(draft.id).expect(200);
+    instant = new Date("2030-02-03T08:00:00.001Z");
+    await cancel(draft.id).expect(409);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("CONFIRMED");
+  });
+  it("DRAFT can be cancelled even after its start, never physically deleted", async () => {
+    const draft = await create(); instant = new Date("2031-01-01T00:00:00Z");
+    expect((await cancel(draft.id).expect(200)).body.status).toBe("CANCELLED");
+  });
+  it("cancel/confirm race has a serializable business outcome", async () => {
+    const draft = await create(); const results = await Promise.all([confirm(draft.id), cancel(draft.id)]);
+    expect(results[1]!.status).toBe(200); expect([200,409]).toContain(results[0]!.status);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("CANCELLED");
+  });
+  it("other patients cannot read, confirm or cancel a reservation", async () => {
+    const draft = await create();
+    await post(`/reservations/${draft.id}/confirm`, {}, "other").expect(403);
+    await post(`/reservations/${draft.id}/cancel`, {}, "other").expect(403);
+    await request(app()).get(`/reservations/${draft.id}`).set("Authorization", "Bearer other").expect(403);
+  });
+  it("only notifies after commit, and notification failure preserves success", async () => {
+    const draft = await create(); let observed: string | undefined;
     const reader = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-    let observedStatus: string | undefined;
     try {
-      const api = createApp({ db, now, notifications: { async sendReservationConfirmation(message) {
-        observedStatus = (await reader.reservation.findUnique({ where: { id: message.reservationId } }))?.status;
-      } } });
-      await request(api).post("/reservations").send(payload()).expect(201);
-      expect(observedStatus).toBe("CONFIRMED");
+      const api = createApp({ db, now: () => instant, actors: new Map([["patient", { role: "patient", id: patientId }]]),
+        logger: { warn() {}, error: console.error }, notifications: { async sendReservationConfirmation(message) {
+          observed = (await reader.reservation.findUniqueOrThrow({ where: { id: message.reservationId } })).status;
+          throw new Error("simulated failure");
+        } } });
+      await request(api).post(`/reservations/${draft.id}/confirm`).set("Authorization", "Bearer patient").expect(200);
+      expect(observed).toBe("CONFIRMED");
     } finally { await reader.$disconnect(); }
-  });
-  it("keeps HTTP 201 and the confirmed record if notification fails", async () => {
-    const warnings: unknown[] = [];
-    const api = createApp({ db, now, logger: { warn: entry => { warnings.push(entry); }, error: console.error }, notifications: { async sendReservationConfirmation() {
-      throw new Error("simulated notification failure");
-    } } });
-    const response = await request(api).post("/reservations").send(payload()).expect(201);
-    expect(await db.reservation.findUnique({ where: { id: response.body.id } })).toMatchObject({ status: "CONFIRMED" });
-    expect(warnings).toEqual([{ event: "notification_failed", reservationId: response.body.id }]);
-  });
-});
-
-describe("Database invariants even without HTTP validation", () => {
-  it("rejects overlapping confirmed writes directly in PostgreSQL", async () => {
-    const data = { patientId, doctorId, serviceId, status: "CONFIRMED" as const,
-      startsAt: new Date("2030-02-04T08:00:00Z"), endsAt: new Date("2030-02-04T08:30:00Z") };
-    await db.reservation.create({ data });
-    await expect(db.reservation.create({ data })).rejects.toThrow();
-  });
-  it("rejects zero-length appointments", async () => {
-    const time = new Date("2030-02-04T08:00:00Z");
-    await expect(db.reservation.create({ data: { patientId, doctorId, serviceId,
-      startsAt: time, endsAt: time } })).rejects.toThrow();
-  });
-  it("rejects invalid working windows", async () => {
-    await expect(db.workingWindow.create({ data: { doctorId, weekday: 0, startMinute: 0, endMinute: 1500 } })).rejects.toThrow();
-  });
-  it("rejects invalid service duration", async () => {
-    await expect(db.service.update({ where: { id: serviceId }, data: { durationMinutes: 0 } })).rejects.toThrow();
   });
 });

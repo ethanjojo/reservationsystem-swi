@@ -1,3 +1,4 @@
+import { demoActors } from "./actors.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client.js";
 import { createApp } from "./app.js";
@@ -6,7 +7,7 @@ import { createNotificationStub } from "./notifications/notification-stub.js";
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required");
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-const app = createApp({ db, notifications: createNotificationStub() });
+const app = createApp({ db, notifications: createNotificationStub(), actors: demoActors() });
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, "127.0.0.1", () => {
   console.info(`BookerDoc API: http://localhost:${port}`);
