@@ -29,7 +29,7 @@ Cílový model: User (id, name, email), Doctor (id, name), Service (id, doctorId
 WorkingWindow (id, doctorId, weekday, startMinute, endMinute) a Reservation
 (id, patientId, doctorId, serviceId, startsAt, endsAt, status, createdAt).
 Pracovní okna používají ISO den týdne 1–7 a minuty od půlnoci v Europe/Prague; okno nepřechází přes půlnoc.
-V C01 se ukládají User, Doctor, Service a Reservation. WorkingWindow je zatím definice pro CP1.
+V C01 se ukládají User, Doctor, Service a Reservation. WorkingWindow byl v C01 pouze definován; CP1 již přidává model, migraci a demo seed.
 Konec existující rezervace se nemění při změně délky služby.
 
 ## State-changing operation
@@ -42,7 +42,7 @@ Neúspěšné vytvoření nezanechá potvrzenou rezervaci. Zrušené rezervace s
 Dvě CONFIRMED rezervace stejného lékaře se nesmí překrývat, ani pokud mají odlišnou službu.
 Intervaly jsou polouzavřené [start, end): konec v 10:00 dovoluje další začátek v 10:00.
 Konflikt: existing.start < requested.end AND existing.end > requested.start.
-Pravidlo musí v CP1 platit i při souběžných požadavcích; C01 persistence spike je ještě neimplementuje.
+Pravidlo musí v CP1 platit i při souběžných požadavcích; C01 persistence spike je neimplementoval; CP1 je vynucuje PostgreSQL exclusion constraintem.
 
 ## Domain-specific business rule
 Pacient může zrušit CONFIRMED rezervaci, pokud startsAt − aktuální čas ≥ 24 hodin.
@@ -53,7 +53,7 @@ Jde o 24 uplynulých hodin, nikoli o předchozí kalendářní den. DRAFT lze zr
 Notification Service: po potvrzení databázové transakce požádáme službu o potvrzovací e-mail.
 Vstup: reservationId, recipient, doctorName, serviceName, startsAt a endsAt.
 Výstup: přijetí požadavku nebo chyba. Selhání e-mailu nevrací rezervaci zpět z CONFIRMED.
-C01 definuje TypeScript port; reálné e-maily ani spike B se neprovádějí.
+C01 definoval TypeScript port; CP1 volá lokální stub po DB commitu. Reálné e-maily se neodesílají.
 
 ## Assumption
 Lékař obsluhuje právě jednoho pacienta současně; není sdílená kapacita více lékařů.

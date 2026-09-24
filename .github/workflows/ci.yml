@@ -1,4 +1,4 @@
-name: C01 checks
+name: Project checks
 on:
   push:
     branches: [master, 'codex/**']

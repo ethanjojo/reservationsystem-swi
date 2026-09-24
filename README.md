@@ -16,20 +16,23 @@ rezervace se automaticky potvrdí a následně se požádá notifikační služb
 [Společný repozitář](https://github.com/ethanjojo/reservationsystem-swi).
 Všichni tři mají podle GitHub collaborators API přístup k zápisu (ověřeno 15. 9. 2026).
 
-## Stav C01
+## Aktuální stav — CP1
 
-Implementováno: Express health endpoint, základ React/shadcn UI, Prisma model a migrace,
-repository pro zápis/čtení rezervace, skutečně provedený persistence spike A a automatizované kontroly.
+C01 je uzavřený včetně Danielova review a merge. CP1 nyní implementuje runnable cestu
+`POST /reservations` → validace → CONFIRMED v PostgreSQL → notifikační stub → HTTP 201.
+Databáze chrání před překryvem i při souběžných požadavcích. Lékařova pracovní okna
+jsou modelovaná a lokální demo seed vloží služby a pracovní dobu.
 
-Definováno pro další týdny: vytváření/potvrzování/rušení rezervací, dostupnost, pracovní okna,
-pravidlo překryvu, zrušení nejpozději 24 hodin před termínem a notifikační hranice.
-**Rezervační API, kompletní UI ani skutečné odesílání e-mailů zatím implementované nejsou.**
+Frontend zatím zůstává úvodní stránkou. Formulář, endpoint pro dostupné začátky,
+rušení a skutečné e-maily budou v dalších PR. API běží lokálně bez autentizace;
+pro CP1 používejte syntetická data.
 
 - [Project Frame a pravidla](docs/intent-and-change.md)
 - [Architektura a rozhodnutí](docs/architecture-and-decisions.md)
-- [Evidence spiku a stav všech 15 bodů DoD](docs/evidence-and-evolution.md)
-- [Issue C01 engineering spike](https://github.com/ethanjojo/reservationsystem-swi/issues/1)
-- [Pull request C01](https://github.com/ethanjojo/reservationsystem-swi/pull/2)
+- [Uzavřená evidence C01 — 15/15 bodů](docs/evidence-and-evolution.md)
+- [CP1 specifikace a plán](docs/plans/cp1.md)
+- [CP1 evidence](docs/cp1-evidence.md)
+- [C01 issue #1](https://github.com/ethanjojo/reservationsystem-swi/issues/1) a [PR #2](https://github.com/ethanjojo/reservationsystem-swi/pull/2)
 
 ## Technologie a předpoklady
 
@@ -50,15 +53,16 @@ cp .env.example .env
 docker compose up -d --wait
 npm run db:generate
 npm run db:migrate
+npm run db:seed
 npm run typecheck
 npm test
 npm run build
 ```
 
 `db:migrate` aplikuje verzované migrace do vývojové DB; `npm test` sám aplikuje stejné migrace
-pouze do testovací DB a spustí integrační test. Test vytvoří syntetická data s unikátními UUID,
-odpojí zapisujícího klienta a přečte záznam druhým klientem. V `finally` uklidí jen vlastní data.
-Nepoužívá reset ani mazání všech tabulek. Není potřeba seed ani externí e-mailový účet.
+pouze do testovací DB a spustí integrační test. Testy používají syntetická data s unikátními UUID a skutečné HTTP/DB scénáře.
+V `finally` uklidí jen vlastní data; nepoužívají reset ani mazání všech tabulek.
+`db:seed` je pro ruční demo; testy jej nepotřebují a žádný e-mailový účet není potřeba.
 
 V samostatných terminálech:
 
@@ -106,43 +110,82 @@ Pokud porty 55432/55433 používá jiná aplikace, upravte Compose i odpovídaj�
 ```text
 apps/api/src/                  Express, persistence repository, notification port
 apps/api/prisma/               Model a verzované migrace
-apps/api/tests/                PostgreSQL integrační test
+apps/api/tests/                HTTP/DB integrační testy a časová pravidla
 apps/web/src/                  React a shadcn komponenty
 scripts/test-db.mjs            Bezpečné spuštění migrace a testu nad testovací DB
 docs/                         Project Frame, architektura, evidence
 .github/workflows/ci.yml       Typy, build a test proti PostgreSQL
 ```
 
-## CP1 walking skeleton
+## CP1 walking skeleton — runnable
 
-**Pouze definice pro C01. Runnable musí být po C03 / před C04.**
-Jedna end-to-end cesta (API → databáze → ověřená odpověď):
+Po výše uvedeném spuštění DB, migrací, seedu a API:
 
-```text
-POST /reservations { patientId, doctorId, serviceId, startsAt }
-→ načíst službu a vypočítat endsAt
-→ ověřit vlastníka služby, budoucí čas a celé umístění do pracovního okna
-→ atomicky potvrdit a uložit CONFIRMED bez překryvu
-→ po DB commitu požádat Notification Service o potvrzovací e-mail
-→ HTTP 201 { id, status: "CONFIRMED", startsAt, endsAt }
-→ automatizovaný HTTP check a načtení uložené rezervace z DB
+```bash
+curl -i http://localhost:3000/reservations \
+  -H 'Content-Type: application/json' \
+  --data '{"patientId":"00000000-0000-4000-8000-000000000001","doctorId":"00000000-0000-4000-8000-000000000002","serviceId":"00000000-0000-4000-8000-000000000003","startsAt":"2030-02-04T09:00:00+01:00"}'
 ```
 
-`startsAt` musí být ISO 8601 s offsetem/Z. Časy prezentujeme v Europe/Prague.
-CP1 používá syntetického demo pacienta a notifikační stub. Skutečné e-maily přijdou později.
-Invalidní vstup: 400; chybějící pacient/lékař/služba: 404; konflikt: 409.
-Selhání notifikace nesmí změnit potvrzenou rezervaci ani vrátit chybu samotného vytvoření.
+Očekává se HTTP **201**:
 
-Acceptance checks CP1: platný vstup → 201 a shodný záznam v DB; kolize → 409 bez další rezervace;
-dvě souběžné kolidující žádosti → právě jedno potvrzení; navazující intervaly jsou povolené.
-V CP1 doplníme pracovní okna a DB exclusion constraint popsaný v architektonickém rozhodnutí.
-C01 persistence repository tyto doménové kontroly ještě neposkytuje.
+```json
+{
+  "id": "vygenerované UUID",
+  "status": "CONFIRMED",
+  "startsAt": "2030-02-04T08:00:00.000Z",
+  "endsAt": "2030-02-04T08:30:00.000Z"
+}
+```
+
+Demo lékař pracuje pondělí–pátek 08:00–16:00 v Europe/Prague; konzultace trvá 30 minut.
+Seed je opakovatelný, již existující demo záznamy ani rezervace nepřepisuje.
+Datum požadavku musí být budoucí pracovní den. Opakování stejného požadavku vrátí **409**;
+pro druhou platnou rezervaci změňte začátek například na 09:30.
+
+```text
+POST /reservations
+→ strict UUID/ISO vstup, načíst pacienta, lékaře a jeho službu
+→ ověřit budoucí začátek na 15min mřížce od začátku okna
+→ vypočítat konec podle délky služby, celý interval musí ležet v jednom okně
+→ v transakci uložit CONFIRMED, DB exclusion constraint odmítne překryv
+→ po commitu požádat stub o notifikaci
+→ HTTP 201 + id/stav/časové okamžiky
+→ npm test ověří HTTP odpověď i skutečně uloženou rezervaci
+```
+
+Notifikační stub vypíše `notification_stub_accepted` a ID rezervace; e-mail neodesílá
+ani neloguje jeho obsah. Selhání stubu vypíše `notification_failed`, rezervace zůstane potvrzená
+s HTTP 201. Trvalé retry/outbox a skutečný poskytovatel zatím nejsou implementované.
+
+### HTTP kontrakt
+
+Vstup musí mít přesně patientId, doctorId, serviceId a startsAt (ISO s offsetem/Z, nejvýše 3 desetinná místa sekund).
+Začátek musí mít celé minuty; začátky počítáme po 15 minutách od začátku pracovního okna.
+Délka služby je 1–1440 uplynulých minut, včetně změn letního času. Intervaly jsou [start,end).
+
+| HTTP | error.code | Příčina |
+| --- | --- | --- |
+| 201 | — | Potvrzeno a uloženo |
+| 400 | INVALID_INPUT | Chybné UUID/ISO/JSON nebo nadbytečná/chybějící pole |
+| 400 | START_MUST_BE_FUTURE | Začátek v minulosti nebo právě teď |
+| 400 | SERVICE_DOCTOR_MISMATCH | Služba nepatří lékaři |
+| 400 | OUTSIDE_WORKING_WINDOW | Čas, délka nebo 15min mřížka nevyhovuje oknu |
+| 404 | RESOURCE_NOT_FOUND | Pacient, lékař nebo služba neexistuje |
+| 409 | RESERVATION_CONFLICT | Překryv potvrzených rezervací stejného lékaře |
+| 413 | PAYLOAD_TOO_LARGE | JSON přes 16 kB |
+| 500 | INTERNAL_ERROR | Neočekávaná chyba; interní detail se neposílá klientovi |
+
+### Migrace a souběh
+
+`db:migrate` potřebuje oprávnění vytvořit PostgreSQL extension `btree_gist` (lokální Compose
+uživatel je má). Exclusion a CHECK constraints jsou v SQL migraci; Prisma schema je neumí
+plně vyjádřit. Používejte migrace, nikoli `prisma db push` jako náhradu.
+Pokud už DB obsahuje neplatné intervaly nebo překryvy, nová migrace správně selže;
+data se nemažou ani neopravují automaticky. Před migrací opravte nekonzistenci řízeně.
 
 ## Change + review smyčka
 
-1. [Issue #1](https://github.com/ethanjojo/reservationsystem-swi/issues/1): C01 engineering spike.
-2. Jan Horák s asistencí Codexu připravuje malé commity ve větvi `codex/c01-engineering-spike`.
-3. Daniel Krásný zkontroluje PR **před integrací**; použije kontrolní seznam v PR šabloně.
-4. Po review tým integruje změnu do `master` a doplní odkaz na review a merge do evidence.
-
-Otevřený PR ani automatické kontroly samy o sobě nesplňují bod reviewed and integrated change.
+C01 PR #2 byl schválen Danielem Krásným a integrován do master; odkazy jsou v C01 evidenci.
+CP1 se připravuje samostatně ve větvi `codex/cp1-reservation-flow` po malých commitech.
+Nový PR opět vyžaduje review jiným členem před merge. Technické review agenta není týmové schválení.

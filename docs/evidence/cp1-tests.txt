@@ -1,0 +1,43 @@
+
+> bookerdoc@0.1.0 test
+> npm run db:generate && node scripts/test-db.mjs
+
+
+> bookerdoc@0.1.0 db:generate
+> npm run db:generate -w @bookerdoc/api
+
+
+> @bookerdoc/api@0.1.0 db:generate
+> prisma generate
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+
+✔ Generated Prisma Client (7.10.0) to ./src/generated/prisma in 131ms
+
+
+> @bookerdoc/api@0.1.0 db:migrate
+> prisma migrate deploy
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "bookerdoc_test", schema "public" at "localhost:55433"
+
+3 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+
+> @bookerdoc/api@0.1.0 test:integration
+> vitest run
+
+
+ RUN  v5.0.1 /Users/george/Desktop/reservationsystem-swi/apps/api
+
+
+ Test Files  3 passed (3)
+      Tests  49 passed (49)
+   Start at  15:28:02
+   Duration  2.56s (tests 67%, import 17%, transform 16%, worker 1%)

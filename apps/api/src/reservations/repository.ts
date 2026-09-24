@@ -9,8 +9,8 @@ export interface NewReservation {
   status: ReservationStatus;
 }
 
-/** Persistence only; confirmation and business validation belong to the CP1 use case. */
-export function createReservationRepository(db: PrismaClient) {
+/** Persistence only; createConfirmedReservation owns confirmation and business validation. */
+export function createReservationRepository(db: Pick<PrismaClient, "reservation">) {
   return {
     async create(input: NewReservation): Promise<Reservation> {
       return db.reservation.create({ data: input });
