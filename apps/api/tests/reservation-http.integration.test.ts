@@ -131,7 +131,8 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
   });
   it("owner patient and doctor can read reservation with contract fields", async () => {
     const draft = await create();
-    const expected = { id: draft.id, status: "DRAFT", startsAt: draft.startsAt, endsAt: draft.endsAt };
+    const expected = { id: draft.id, status: "DRAFT", startsAt: draft.startsAt, endsAt: draft.endsAt,
+      approvalRequestedAt: null, approvalExpiresAt: null };
     await get(`/reservations/${draft.id}`).expect(200, expected);
     await get(`/reservations/${draft.id}`, "doctor").expect(200, expected);
   });
