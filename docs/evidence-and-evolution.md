@@ -86,3 +86,35 @@ C01 je uzavřený: všech 15 bodů je splněno. Týmová review smyčka je dolo�
   a `npm run build`. Nebyl to clean checkout druhým členem, proto nejde o spike C.
 - Závislosti: audit hlásí 4 high položky; přesný řetězec, doporučení a limit jsou
   uvedeny v [architektonických rozhodnutích](architecture-and-decisions.md#stav-závislostí-při-c01).
+
+
+## C02 — baseline v0.1 (2026-09-22)
+
+### Přijatý baseline
+
+Normativní zadání: [v0.1](c02/v01.md). Vlastník schválil návrh chování v konverzaci. **Schválení celým týmem čeká na skutečné review PR**; implementace ani tag toto schválení nenahrazují. Reprodukovatelný snapshot: tag `c02-v0.1`.
+
+### Předvedené operace a skutečné příklady
+
+Spuštěno proti PostgreSQL 17.9: `npm test` — **45 testů prošlo**; `npm run typecheck` a `npm run build` prošly. [Výstup testů](evidence/c02-v01-tests.txt). Následně spuštěno `npm run demo:c02` proti běžícímu API na portu 3130: [HTTP výstup](evidence/c02-v01-demo.txt).
+
+| Operace | Úspěšný příklad | Negativní / hraniční příklad |
+| --- | --- | --- |
+| Create | 201 DRAFT, uložená rezervace | 400 neúplný vstup; 403 cizí pacient |
+| Availability | 200 true po vytvoření draftu a po zrušení | 200 false po potvrzení; 400 neplatný čas |
+| Confirm | 200 CONFIRMED a následná notifikace | 409 překryv, draft zůstává; dva souběžné požadavky potvrdí nejvýše jeden |
+| Cancel | 200 CANCELLED, uchovaný řádek; opakování 200 | přesně 24 h dovoleno, o 1 ms později 409; neexistující ID 404 |
+
+HTTP ukázka běží s reálným časem a uklízí vytvořené rezervace zrušením. Přesné časové hranice a souběh ověřují integrační testy s injektovanými hodinami, nikoli veřejným API pro změnu času.
+
+### Rozdíly a jejich řešení
+
+CP1 vytvářel rovnou potvrzenou rezervaci. C02 vyžaduje oddělené Create a Confirm: kontrakt byl vědomě změněn na DRAFT → CONFIRMED. Uživatelské automatické potvrzení lze složit ze dvou volání. Identita pacienta se ověřuje serverovou mapou demo tokenů, nikoli pouze ID z těla. Staré dokumenty jsou označené jako historické.
+
+Při ověření byl nejprve vypnutý Docker; po spuštění databází testy fungují. Pro ověření regresí byly dočasně vráceny oba staré aplikační soubory: 14 testů selhalo, po obnovení implementace všech 45 prošlo. Původní chování tedy nová sada rozlišuje.
+
+### Dopad, nejistoty a vstupy pro C03
+
+Další změna schvalování bude analyzována samostatně před úpravou baseline. Otevřené zůstávají produkční přihlášení, skutečné doručení emailů, úpravy pracovních oken za provozu a klientský rezervační formulář. Aktuální frontend je demonstrační; všechny požadované operace jsou spustitelné přes API.
+
+C03 drivers: atomické přidělení výlučného zdroje (DB exclusion constraint), serializace změn jedné rezervace (row lock), jednotný serverový čas a časové pásmo, oddělení trvalého stavu od selhání notifikace, důvěryhodná identita aktéra. Outbox, autentizace a plánování změn kalendáře jsou kandidáti dalšího návrhu, nikoli již dodané funkce.

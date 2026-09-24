@@ -1,0 +1,20 @@
+
+> bookerdoc@0.1.0 demo:c02
+> node --env-file=.env scripts/demo-c02.mjs
+
+GET /availability -> 200 true
+POST /reservations -> 400 INVALID_INPUT
+GET /availability -> 400 INVALID_INPUT
+POST /reservations -> 201 DRAFT
+GET /availability -> 200 true
+POST /reservations/f9aa2b04-0740-4de5-b43a-babbf7f0a19a/confirm -> 200 CONFIRMED
+GET /availability -> 200 false
+POST /reservations -> 201 DRAFT
+POST /reservations/c8687efd-6c49-4cad-a181-17f56dcc5015/confirm -> 409 RESERVATION_CONFLICT
+POST /reservations/f9aa2b04-0740-4de5-b43a-babbf7f0a19a/cancel -> 200 CANCELLED
+GET /availability -> 200 true
+POST /reservations/f9aa2b04-0740-4de5-b43a-babbf7f0a19a/cancel -> 200 CANCELLED
+POST /reservations/00000000-0000-4000-8000-000000000098/cancel -> 404 RESERVATION_NOT_FOUND
+C02 v0.1: all four operations demonstrated successfully.
+POST /reservations/f9aa2b04-0740-4de5-b43a-babbf7f0a19a/cancel -> 200 CANCELLED
+POST /reservations/c8687efd-6c49-4cad-a181-17f56dcc5015/cancel -> 200 CANCELLED
