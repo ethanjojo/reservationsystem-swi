@@ -19,7 +19,7 @@ const app = () => createApp({ db, now: () => instant, actors: new Map([
   ["doctor", { role: "doctor" as const, id: doctorId }],
 ]), notifications: { async sendReservationConfirmation(message) { delivered.push(message); } } });
 const post = (path: string, body = {}, token = "patient") => request(app()).post(path).set("Authorization", `Bearer ${token}`).send(body);
-const get = (path: string, token = "patient") => request(app()).get(path).set("Authorization", `Bearer ${token}`).send(body);
+const get = (path: string, token = "patient") => request(app()).get(path).set("Authorization", `Bearer ${token}`);
 const create = async () => (await post("/reservations", payload()).expect(201)).body;
 const confirm = (id: string) => post(`/reservations/${id}/confirm`);
 const cancel = (id: string) => post(`/reservations/${id}/cancel`);
