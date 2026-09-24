@@ -19,6 +19,7 @@ const app = () => createApp({ db, now: () => instant, actors: new Map([
   ["doctor", { role: "doctor" as const, id: doctorId }],
 ]), notifications: { async sendReservationConfirmation(message) { delivered.push(message); } } });
 const post = (path: string, body = {}, token = "patient") => request(app()).post(path).set("Authorization", `Bearer ${token}`).send(body);
+const get = (path: string, token = "patient") => request(app()).get(path).set("Authorization", `Bearer ${token}`).send(body);
 const create = async () => (await post("/reservations", payload()).expect(201)).body;
 const confirm = (id: string) => post(`/reservations/${id}/confirm`);
 const cancel = (id: string) => post(`/reservations/${id}/cancel`);
@@ -126,6 +127,12 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
     const draft = await create(); const results = await Promise.all([confirm(draft.id), cancel(draft.id)]);
     expect(results[1]!.status).toBe(200); expect([200,409]).toContain(results[0]!.status);
     expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("CANCELLED");
+  });
+  it("owner patient and doctor can read reservation with contract fields", async () => {
+    const draft = await create();
+    const expected = { id: draft.id, status: "DRAFT", startsAt: draft.startsAt, endsAt: draft.endsAt };
+    await get(`/reservations/${draft.id}`).expect(200, expected);
+    await get(`/reservations/${draft.id}`, "doctor").expect(200, expected);
   });
   it("other patients cannot read, confirm or cancel a reservation", async () => {
     const draft = await create();
