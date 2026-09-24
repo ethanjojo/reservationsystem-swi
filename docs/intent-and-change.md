@@ -1,4 +1,4 @@
-> Historický podklad C01/CP1. Aktuální C02 chování a vědomé změny kontraktu určuje [baseline v0.1](c02/v01.md).
+> Historický podklad C01/CP1. Aktuální C02 chování a vědomé změny kontraktu určuje [baseline v0.2](c02/v02.md).
 
 # Project Frame
 

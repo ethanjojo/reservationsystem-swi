@@ -33,7 +33,7 @@ describe("Reservation persistence against real PostgreSQL", () => {
       expect(saved.id).toMatch(/^[0-9a-f-]{36}$/);
       await writer.$disconnect();
       const loaded = await createReservationRepository(reader).findById(saved.id);
-      expect(loaded).toEqual({ ...input, id: saved.id, createdAt: saved.createdAt });
+      expect(loaded).toEqual({ ...input, id: saved.id, createdAt: saved.createdAt, approvalRequestedAt: null, approvalExpiresAt: null });
       expect(loaded?.startsAt.toISOString()).toBe("2030-02-04T08:00:00.123Z");
       expect(loaded?.endsAt.toISOString()).toBe("2030-02-04T08:30:00.123Z");
       expect(loaded?.createdAt).toBeInstanceOf(Date);

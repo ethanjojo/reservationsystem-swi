@@ -16,6 +16,7 @@ const payload = () => ({ patientId, doctorId, serviceId, startsAt: "2030-02-04T0
 const app = () => createApp({ db, now: () => instant, actors: new Map([
   ["patient", { role: "patient" as const, id: patientId }],
   ["other", { role: "patient" as const, id: "00000000-0000-4000-8000-000000000099" }],
+  ["other-doctor", { role: "doctor" as const, id: "00000000-0000-4000-8000-000000000098" }],
   ["doctor", { role: "doctor" as const, id: doctorId }],
 ]), notifications: { async sendReservationConfirmation(message) { delivered.push(message); } } });
 const post = (path: string, body = {}, token = "patient") => request(app()).post(path).set("Authorization", `Bearer ${token}`).send(body);
@@ -152,5 +153,139 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
       await request(api).post(`/reservations/${draft.id}/confirm`).set("Authorization", "Bearer patient").expect(200);
       expect(observed).toBe("CONFIRMED");
     } finally { await reader.$disconnect(); }
+  });
+});
+
+
+describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
+  beforeEach(async () => {
+    await db.doctor.update({ where: { id: doctorId }, data: { requiresApproval: true } });
+  });
+  const approve = (id: string, token = "doctor") => post(`/reservations/${id}/approve`, {}, token);
+  const reject = (id: string, token = "doctor") => post(`/reservations/${id}/reject`, {}, token);
+  const read = (id: string, token = "patient") => request(app()).get(`/reservations/${id}`).set("Authorization", `Bearer ${token}`);
+  const pending = async () => { const row = await create(); return (await confirm(row.id).expect(200)).body; };
+
+  it("REQ-07: persists a nonblocking request with a 24h deadline and no confirmation email", async () => {
+    const row = await pending();
+    expect(row).toMatchObject({ status: "PENDING_APPROVAL", approvalRequestedAt: "2030-01-01T00:00:00.000Z", approvalExpiresAt: "2030-01-02T00:00:00.000Z" });
+    expect((await availability().expect(200)).body.available).toBe(true);
+    expect(delivered).toHaveLength(0);
+    await confirm(row.id).expect(409);
+    expect((await read(row.id, "doctor").expect(200)).body.status).toBe("PENDING_APPROVAL");
+  });
+  it("REQ-08: only the owning doctor can approve, exactly once", async () => {
+    const row = await pending();
+    await approve(row.id, "patient").expect(403); await approve(row.id, "other-doctor").expect(403);
+    await reject(row.id, "patient").expect(403); await reject(row.id, "other-doctor").expect(403);
+    await read(row.id, "other-doctor").expect(403);
+    instant = new Date("2030-01-01T01:00:00Z"); // delayed decision remains valid
+    expect((await approve(row.id).expect(200)).body.status).toBe("CONFIRMED");
+    expect((await availability().expect(200)).body.available).toBe(false);
+    await approve(row.id).expect(409); await reject(row.id).expect(409);
+    expect(delivered).toHaveLength(1);
+  });
+  it("REQ-09: concurrent conflicting approvals confirm one and preserve the other request", async () => {
+    const a = await pending(), b = await pending();
+    const results = await Promise.all([approve(a.id), approve(b.id)]);
+    expect(results.map(r => r.status).sort()).toEqual([200,409]);
+    const rows = await db.reservation.findMany({ where: { patientId } });
+    expect(rows.map(r => r.status).sort()).toEqual(["CONFIRMED", "PENDING_APPROVAL"]);
+    expect(delivered).toHaveLength(1);
+  });
+  it("REQ-10: rejection is persistent and terminal without allocation or notification", async () => {
+    const row = await pending();
+    expect((await reject(row.id).expect(200)).body.status).toBe("REJECTED");
+    expect((await read(row.id).expect(200)).body.status).toBe("REJECTED");
+    await reject(row.id).expect(409); await approve(row.id).expect(409); await cancel(row.id).expect(409);
+    expect((await availability().expect(200)).body.available).toBe(true);
+    expect(delivered).toHaveLength(0);
+  });
+  it("REQ-11: deadline is exact and survives a fresh app instance", async () => {
+    const row = await pending();
+    instant = new Date("2030-01-01T23:59:59.999Z");
+    expect((await read(row.id).expect(200)).body.status).toBe("PENDING_APPROVAL");
+    instant = new Date("2030-01-02T00:00:00Z");
+    // read() constructs a fresh Express app; expiry comes from persisted metadata.
+    expect((await read(row.id).expect(200)).body.status).toBe("EXPIRED");
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("EXPIRED");
+    await approve(row.id).expect(409); await reject(row.id).expect(409); await cancel(row.id).expect(409);
+    expect((await availability().expect(200)).body.available).toBe(true);
+    expect(delivered).toHaveLength(0);
+  });
+  it.each(["approve", "reject", "cancel", "confirm"])("REQ-11: %s commits expiry despite returning 409", async operation => {
+    const row = await pending(); instant = new Date("2030-01-02T00:00:00Z");
+    const token = operation === "approve" || operation === "reject" ? "doctor" : "patient";
+    const result = await post(`/reservations/${row.id}/${operation}`, {}, token).expect(409);
+    expect(result.body.error.code).toBe("APPROVAL_EXPIRED");
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("EXPIRED");
+  });
+  it("caps waiting at the appointment and forbids approving at its start", async () => {
+    instant = new Date("2030-02-04T07:00:00Z"); const row = await pending();
+    expect(row.approvalExpiresAt).toBe("2030-02-04T08:00:00.000Z");
+    instant = new Date("2030-02-04T08:00:00Z"); await approve(row.id).expect(409);
+    expect((await read(row.id).expect(200)).body.status).toBe("EXPIRED");
+  });
+  it("allows pending cancellation less than 24h before start", async () => {
+    instant = new Date("2030-02-04T07:00:00Z"); const row = await pending();
+    expect((await cancel(row.id).expect(200)).body.status).toBe("CANCELLED");
+    await approve(row.id).expect(409); await cancel(row.id).expect(200);
+  });
+  it("approval/cancel and approval/reject races have legal serial outcomes", async () => {
+    const row = await pending();
+    const results = await Promise.all([approve(row.id), cancel(row.id)]);
+    expect(results[1]!.status).toBe(200); expect([200,409]).toContain(results[0]!.status);
+    expect((await read(row.id).expect(200)).body.status).toBe("CANCELLED");
+    const next = await pending();
+    const decisions = await Promise.all([approve(next.id), reject(next.id)]);
+    expect(decisions.map(r => r.status).sort()).toEqual([200,409]);
+    expect(["CONFIRMED", "REJECTED"]).toContain((await read(next.id).expect(200)).body.status);
+  });
+  it("rechecks windows while preserving the original duration at approval", async () => {
+    const row = await pending();
+    await db.service.update({ where: { id: serviceId }, data: { durationMinutes: 60 } });
+    expect((await approve(row.id).expect(200)).body.endsAt).toBe(row.endsAt);
+    const next = await pending(); await db.workingWindow.deleteMany({ where: { doctorId } });
+    await approve(next.id).expect(400);
+    expect((await read(next.id).expect(200)).body.status).toBe("PENDING_APPROVAL");
+  });
+  it("unauthorized access cannot materialize expiry", async () => {
+    const row = await pending(); instant = new Date("2030-01-02T00:00:00Z");
+    await approve(row.id, "other-doctor").expect(403); await read(row.id, "other").expect(403);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("PENDING_APPROVAL");
+  });
+  it("REQ-11: approval samples time after waiting for the reservation lock", async () => {
+    const row = await pending();
+    instant = new Date("2030-01-01T23:59:59.999Z");
+    let unlock!: () => void, acquired!: () => void;
+    const held = new Promise<void>(resolve => { acquired = resolve; });
+    const release = new Promise<void>(resolve => { unlock = resolve; });
+    const blocker = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Reservation" WHERE "id" = ${row.id}::uuid FOR UPDATE`;
+      acquired(); await release;
+    }, { timeout: 10_000 });
+    await held;
+    const decision = approve(row.id).then(response => response);
+    try {
+      // Wait for PostgreSQL to report the actual blocked request, not an arbitrary delay.
+      await expect.poll(async () => {
+        const waiting = await db.$queryRaw<Array<{ count: bigint }>>`
+          SELECT count(*) AS count FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'
+          AND query LIKE 'SELECT "id" FROM "Reservation"%'
+        `;
+        return Number(waiting[0]!.count);
+      }, { timeout: 3000 }).toBeGreaterThan(0);
+      instant = new Date("2030-01-02T00:00:00Z");
+    } finally { unlock(); await blocker; }
+    const response = await decision;
+    expect(response.status).toBe(409); expect(response.body.error.code).toBe("APPROVAL_EXPIRED");
+    expect((await read(row.id).expect(200)).body.status).toBe("EXPIRED");
+  });
+  it("changing the source flag does not bypass approval for an existing request", async () => {
+    const row = await pending();
+    await db.doctor.update({ where: { id: doctorId }, data: { requiresApproval: false } });
+    await confirm(row.id).expect(409);
+    expect((await approve(row.id).expect(200)).body.status).toBe("CONFIRMED");
   });
 });
