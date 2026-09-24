@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "test:integration": "vitest run",
+    "test:integration": "vitest run --reporter=verbose",
     "db:seed": "tsx --env-file=../../.env prisma/seed.ts"
   },
   "dependencies": {

@@ -13,6 +13,9 @@ enum ReservationStatus {
   DRAFT
   CONFIRMED
   CANCELLED
+  PENDING_APPROVAL
+  REJECTED
+  EXPIRED
 }
 
 model User {
@@ -23,6 +26,7 @@ model User {
 }
 
 model Doctor {
+  requiresApproval Boolean @default(false)
   id String @id @default(uuid()) @db.Uuid
   name String
   services Service[]
@@ -60,6 +64,8 @@ model Reservation {
   service Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   startsAt DateTime @db.Timestamptz(3)
   endsAt DateTime @db.Timestamptz(3)
+  approvalRequestedAt DateTime? @db.Timestamptz(3)
+  approvalExpiresAt DateTime? @db.Timestamptz(3)
   status ReservationStatus @default(DRAFT)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   @@index([doctorId, startsAt])

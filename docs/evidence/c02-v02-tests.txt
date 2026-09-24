@@ -1,0 +1,105 @@
+
+> bookerdoc@0.1.0 test
+> npm run db:generate && node scripts/test-db.mjs
+
+
+> bookerdoc@0.1.0 db:generate
+> npm run db:generate -w @bookerdoc/api
+
+
+> @bookerdoc/api@0.1.0 db:generate
+> prisma generate
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+
+✔ Generated Prisma Client (7.10.0) to ./src/generated/prisma in 140ms
+
+
+> @bookerdoc/api@0.1.0 db:migrate
+> prisma migrate deploy
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "bookerdoc_test", schema "public" at "localhost:55433"
+
+4 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+
+> @bookerdoc/api@0.1.0 test:integration
+> vitest run --reporter=verbose
+
+
+ RUN  v5.0.1 /Users/george/Desktop/reservationsystem-swi/apps/api
+
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00Z, 30 minutes → true 4ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:30:00Z, 30 minutes → true 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:45:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T06:45:00Z, 30 minutes → false 2ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-05T07:00:00Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:01:00Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00.001Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-07-01T06:00:00Z, 30 minutes → true 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > does not join windows across a lunch break 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > anchors the grid to the window start 3ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > allows an interval ending exactly at local midnight 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > cannot borrow the next day's window 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > uses elapsed duration across the spring DST jump 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > distinguishes both occurrences of the fall repeated hour 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects a fall interval whose middle leaves the working window 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0 2ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration -1 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0.5 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 1441 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration NaN 0ms
+ ✓ tests/reservation.integration.test.ts > Reservation persistence against real PostgreSQL > persists identity, relationships, precise times and status across client connections 652ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: creates a persistent DRAFT without allocation or notification 648ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"patientId":"bad"} leaves no row 76ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:00:00"} leaves no row 52ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-30T09:00:00Z"} leaves no row 29ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2029-02-04T09:00:00Z"} leaves no row 42ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:00:00.0009+01:00"} leaves no row 37ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:01:00+01:00"} leaves no row 40ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T15:45:00+01:00"} leaves no row 45ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-05T09:00:00+01:00"} leaves no row 40ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"status":"CONFIRMED"} leaves no row 44ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > rejects missing identity and acting for another patient 32ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > returns 404 for an unknown resource 28ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-02: availability is read-only and uses half-open intervals 100ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-03: create ignores overlap, confirm rejects it and preserves DRAFT 78ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-04: concurrent conflicting confirms allocate at most once 58ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > same-reservation confirm race sends only one notification 42ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > confirms stored duration even after the service duration changes 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > revalidates future time and current windows at confirmation 31ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-05: cancellation at exactly 24h releases the interval, is retained and idempotent 59ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-05: less than 24h rejects cancellation with unchanged CONFIRMED 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > DRAFT can be cancelled even after its start, never physically deleted 28ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > cancel/confirm race has a serializable business outcome 40ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > other patients cannot read, confirm or cancel a reservation 36ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > only notifies after commit, and notification failure preserves success 48ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-07: persists a nonblocking request with a 24h deadline and no confirmation email 57ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-08: only the owning doctor can approve, exactly once 76ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-09: concurrent conflicting approvals confirm one and preserve the other request 70ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-10: rejection is persistent and terminal without allocation or notification 69ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: deadline is exact and survives a fresh app instance 69ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: approve commits expiry despite returning 409 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: reject commits expiry despite returning 409 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: cancel commits expiry despite returning 409 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: confirm commits expiry despite returning 409 35ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > caps waiting at the appointment and forbids approving at its start 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > allows pending cancellation less than 24h before start 47ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > approval/cancel and approval/reject races have legal serial outcomes 93ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > rechecks windows while preserving the original duration at approval 80ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > unauthorized access cannot materialize expiry 35ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: approval samples time after waiting for the reservation lock 56ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > changing the source flag does not bypass approval for an existing request 39ms
+
+ Test Files  3 passed (3)
+      Tests  61 passed (61)
+   Start at  14:27:49
+   Duration  3.70s (tests 70%, transform 16%, import 13%, worker 1%)
+
