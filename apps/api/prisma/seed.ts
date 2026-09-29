@@ -18,8 +18,8 @@ try {
   await db.$transaction(async tx => {
     await tx.user.upsert({ where: { id: patientId }, update: {},
       create: { id: patientId, name: "Demo pacient", email: "patient@example.test" } });
-    await tx.doctor.upsert({ where: { id: doctorId }, update: {},
-      create: { id: doctorId, name: "Demo lékař" } });
+    await tx.doctor.upsert({ where: { id: doctorId }, update: { requiresApproval: true },
+      create: { id: doctorId, name: "Demo lékař", requiresApproval: true } });
     await tx.service.upsert({ where: { id: serviceId }, update: {},
       create: { id: serviceId, doctorId, name: "Konzultace", durationMinutes: 30 } });
     for (const weekday of [1, 2, 3, 4, 5]) {

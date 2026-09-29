@@ -33,7 +33,7 @@ describe("Reservation persistence against real PostgreSQL", () => {
       expect(saved.id).toMatch(/^[0-9a-f-]{36}$/);
       await writer.$disconnect();
       const loaded = await createReservationRepository(reader).findById(saved.id);
-      expect(loaded).toEqual({ ...input, id: saved.id, createdAt: saved.createdAt });
+      expect(loaded).toEqual({ ...input, id: saved.id, createdAt: saved.createdAt, approvalRequestedAt: null, approvalExpiresAt: null });
       expect(loaded?.startsAt.toISOString()).toBe("2030-02-04T08:00:00.123Z");
       expect(loaded?.endsAt.toISOString()).toBe("2030-02-04T08:30:00.123Z");
       expect(loaded?.createdAt).toBeInstanceOf(Date);
@@ -55,4 +55,53 @@ describe("Reservation persistence against real PostgreSQL", () => {
       }
     }
   }, 15_000);
+
+  it("enforces reservation CHECK and EXCLUDE constraints directly in PostgreSQL", async () => {
+    const db = connect();
+    const patientId = randomUUID();
+    const doctorId = randomUUID();
+    const serviceId = randomUUID();
+    try {
+      await db.user.create({ data: { id: patientId, name: "Test Patient", email: `${patientId}@example.test` } });
+      await db.doctor.create({ data: { id: doctorId, name: "Test Doctor" } });
+      await db.service.create({ data: { id: serviceId, doctorId, name: "Consultation", durationMinutes: 30 } });
+
+      await expect(createReservationRepository(db).create({
+        patientId,
+        doctorId,
+        serviceId,
+        startsAt: new Date("2030-02-04T09:30:00Z"),
+        endsAt: new Date("2030-02-04T09:00:00Z"),
+        status: "CONFIRMED",
+      })).rejects.toThrow(/reservation_positive_interval/);
+
+      await createReservationRepository(db).create({
+        patientId,
+        doctorId,
+        serviceId,
+        startsAt: new Date("2030-02-04T09:00:00Z"),
+        endsAt: new Date("2030-02-04T09:30:00Z"),
+        status: "CONFIRMED",
+      });
+      await expect(createReservationRepository(db).create({
+        patientId,
+        doctorId,
+        serviceId,
+        startsAt: new Date("2030-02-04T09:15:00Z"),
+        endsAt: new Date("2030-02-04T09:45:00Z"),
+        status: "CONFIRMED",
+      })).rejects.toThrow(/reservation_no_overlap/);
+    } finally {
+      try {
+        await db.$transaction([
+          db.reservation.deleteMany({ where: { patientId } }),
+          db.service.deleteMany({ where: { id: serviceId } }),
+          db.doctor.deleteMany({ where: { id: doctorId } }),
+          db.user.deleteMany({ where: { id: patientId } }),
+        ]);
+      } finally {
+        await db.$disconnect();
+      }
+    }
+  });
 });

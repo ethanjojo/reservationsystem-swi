@@ -86,3 +86,88 @@ C01 je uzavřený: všech 15 bodů je splněno. Týmová review smyčka je dolo�
   a `npm run build`. Nebyl to clean checkout druhým členem, proto nejde o spike C.
 - Závislosti: audit hlásí 4 high položky; přesný řetězec, doporučení a limit jsou
   uvedeny v [architektonických rozhodnutích](architecture-and-decisions.md#stav-závislostí-při-c01).
+
+
+## C02 — baseline v0.1 (2026-09-22)
+
+### Přijatý baseline
+
+Normativní zadání: [v0.1](c02/v01.md). Vlastník schválil návrh chování v konverzaci. **Schválení celým týmem čeká na skutečné review PR**; implementace ani tag toto schválení nenahrazují. Reprodukovatelný snapshot: tag `c02-v0.1`.
+
+### Předvedené operace a skutečné příklady
+
+Spuštěno proti PostgreSQL 17.9: `npm test` — **45 testů prošlo**; `npm run typecheck` a `npm run build` prošly. [Výstup testů](evidence/c02-v01-tests.txt). Následně spuštěno `npm run demo:c02` proti běžícímu API na portu 3130: [HTTP výstup](evidence/c02-v01-demo.txt).
+
+| Operace | Úspěšný příklad | Negativní / hraniční příklad |
+| --- | --- | --- |
+| Create | 201 DRAFT, uložená rezervace | 400 neúplný vstup; 403 cizí pacient |
+| Availability | 200 true po vytvoření draftu a po zrušení | 200 false po potvrzení; 400 neplatný čas |
+| Confirm | 200 CONFIRMED a následná notifikace | 409 překryv, draft zůstává; dva souběžné požadavky potvrdí nejvýše jeden |
+| Cancel | 200 CANCELLED, uchovaný řádek; opakování 200 | přesně 24 h dovoleno, o 1 ms později 409; neexistující ID 404 |
+
+HTTP ukázka běží s reálným časem a uklízí vytvořené rezervace zrušením. Přesné časové hranice a souběh ověřují integrační testy s injektovanými hodinami, nikoli veřejným API pro změnu času.
+
+### Rozdíly a jejich řešení
+
+CP1 vytvářel rovnou potvrzenou rezervaci. C02 vyžaduje oddělené Create a Confirm: kontrakt byl vědomě změněn na DRAFT → CONFIRMED. Uživatelské automatické potvrzení lze složit ze dvou volání. Identita pacienta se ověřuje serverovou mapou demo tokenů, nikoli pouze ID z těla. Staré dokumenty jsou označené jako historické.
+
+Při ověření byl nejprve vypnutý Docker; po spuštění databází testy fungují. Pro ověření regresí byly dočasně vráceny oba staré aplikační soubory: 14 testů selhalo, po obnovení implementace všech 45 prošlo. Původní chování tedy nová sada rozlišuje.
+
+### Dopad, nejistoty a vstupy pro C03
+
+Další změna schvalování bude analyzována samostatně před úpravou baseline. Otevřené zůstávají produkční přihlášení, skutečné doručení emailů, úpravy pracovních oken za provozu a klientský rezervační formulář. Aktuální frontend je demonstrační; všechny požadované operace jsou spustitelné přes API.
+
+C03 drivers: atomické přidělení výlučného zdroje (DB exclusion constraint), serializace změn jedné rezervace (row lock), jednotný serverový čas a časové pásmo, oddělení trvalého stavu od selhání notifikace, důvěryhodná identita aktéra. Outbox, autentizace a plánování změn kalendáře jsou kandidáti dalšího návrhu, nikoli již dodané funkce.
+
+
+## Evidence C02: specifikace → běžící aplikace
+
+### Přijatá baseline
+
+[v0.1](c02/v01.md) zachovává čtyři samostatné operace. Aktuální [v0.2](c02/v02.md) přidává schvalování. Produktový návrh odsouhlasil vlastník; **explicitní týmové schválení obou baseline je stále PENDING a musí být doloženo review PR**. Autorská akceptační tabulka a automatické testy nenahrazují odpovědnost členů týmu.
+
+### Předvedené základní operace a skutečně provedené příklady ověření
+
+Dne 2026-09-22: PostgreSQL 17.9, Node 24.19.0. V0.1: 45 úspěšných testů a skutečná HTTP demonstrace popsaná výše. V0.2: **61 úspěšných testů**, typecheck a build; [výstup v0.2 testů](evidence/c02-v02-tests.txt). Lokální API na portu 3131 prošlo `npm run demo:c02`: [výstup HTTP demonstrace](evidence/c02-v02-demo.txt).
+
+| Chování | Skutečně ověřený úspěch | Negativní/hraniční výsledek |
+| --- | --- | --- |
+| Create | 201 DRAFT i pro schvalovaný zdroj | 400 neplatný vstup; 403 cizí identita |
+| Availability | true pro DRAFT i čekání, false po schválení, true po zrušení | 400 neplatný čas; sousedící interval nekolizní |
+| Confirm | běžný zdroj CONFIRMED; schvalovaný PENDING_APPROVAL s deadline | 409 opakování; kolize automatického potvrzení zachová DRAFT |
+| Cancel | čekání i méně než 24h před termínem → CANCELLED | potvrzené přesně 24h ano, o 1ms později 409; EXPIRED/REJECTED nelze oživit |
+| Approve | vlastní lékař, i s hodinovým zpožděním → CONFIRMED | pacient/jiný lékař 403; dva konfliktní Approve → jeden úspěch, druhý 409 a stále čeká |
+| Reject | REJECTED, uchování a čtení pacientem, žádná alokace | opakování či jiný aktér odmítnut; následné Approve 409 |
+| Expire | 1ms před deadline čekání, přesně na deadline EXPIRED | všechny čtyři mutace po deadline 409 a expirace přesto commitnutá |
+| Souběh a trvalost | Approve/Cancel a Approve/Reject mají sekvenční výsledek | skutečný PostgreSQL lock zadrží Approve; čas se posune na deadline, po uvolnění 409 EXPIRED |
+
+Nová instance aplikace čte lhůtu z DB, neobnovuje ji. Expirace se předvádí skutečnými integračními HTTP testy s řízeným serverovým časem; živé demo nečeká 24 hodin. API nepřijímá klientský čas. Čekání, odmítnutí i vypršení ponechávají dostupnost volnou.
+
+### Nalezený nesoulad a způsob vyřešení
+
+Před implementací nová sada ukázala 16 selhání: 15 chybějících schvalovacích scénářů a jeden původní persistence test s očekáváním bez nových nullable polí. Doplněny byly stavové operace a odpověď API; persistence očekávání nyní výslovně kontroluje null metadata automatické rezervace. Původní pravidla pro běžné zdroje zůstala ověřena.
+
+Expirace při odmítnuté mutaci nesmí být vrácena rollbackem. Implementace proto nejdříve uloží EXPIRED a commitne, teprve poté vrátí doménovou chybu; integrační testy kontrolují i skutečný uložený stav. Při závěrečné autorské kontrole byla opravena chybná čísla BR odkazů v dopadové tabulce; týmový review tím není nahrazen.
+
+### Shrnutí dopadu změny
+
+Analýza dopadu je samostatný commit `dfcba90`, před specifikací v0.2 (`deaddd4`) a implementací (`746cfc7`). [Dopadový dokument](c02/v02-impact.md) identifikuje dotčené i nedotčené požadavky. Create se nemění; Availability dál blokuje jen CONFIRMED. Confirm větví podle zdroje; nové Approve/Reject rozhodují čekající žádost. Cancel rozlišuje čekání a potvrzenou alokaci. Stavový model, oprávnění a diagramy zachycují tři nové stavy. Migrace pouze přidává pole/hodnoty, existující lékaři mají default false a rezervace zůstávají zachované. Lokální demo seed výslovně přepíná demo lékaře na schvalování.
+
+### Zbývající předpoklad / neznámá
+
+Tým musí schválit politiku neblokujícího čekání a platnosti min(24h, začátek termínu). Produkční přihlášení, reálné emaily, klientský formulář, delegování schvalovatele a souběžná editace pracovních oken jsou mimo tento checkpoint. Fyzický DB stav bez interakce může zůstat PENDING_APPROVAL; API vždy vyhodnocuje deadline a vrací aktuální logický stav. Neexistuje proaktivní expiry zpráva ani garantované doručení emailu.
+
+### Architektonické drivery přenesené do C03
+
+1. Trvalý odložený proces: žádost a deadline přežijí proces; rozhodnutí musí zohlednit čas i po čekání na zámek.
+2. Konzistentní alokace: dvě čekající žádosti mohou být platné, ale potvrzená kapacita musí být výlučná i v souběhu.
+3. Pozorovatelná expirace versus reporting: on-access materializace stačí pro dnešní API; hromadné reporty a notifikace mohou vyžadovat job.
+4. Oprávnění spojená se zdrojem a pacientem: demo mapu v budoucnu nahradí skutečný autentizační mechanismus.
+5. Oddělené doručení notifikace: stav rezervace přežije chybu odeslání; garance doručení by vyžadovala outbox/retry návrh.
+
+### Commit / tag aplikace
+
+- `c02-v0.1`: samostatné čtyři operace, PR [#5](https://github.com/ethanjojo/reservationsystem-swi/pull/5), navazuje na CP1 #4.
+- `c02-v0.2`: schvalování, odmítnutí, expirace, rozšířené testy a tato evidence; navazující PR má base v0.1.
+
+Tagy jsou reprodukovatelné snapshoty, nikoli záznamy týmového schválení. Před C03 zbývá skutečné týmové review specifikace a následné sloučení PR ve správném pořadí.
