@@ -1,0 +1,43 @@
+# C03: npm run demo:c02 against the built API (node dist/server.js) with the outbox dispatcher running, 2026-10-06
+
+GET /availability -> 200 true
+POST /reservations -> 400 INVALID_INPUT
+GET /availability -> 400 INVALID_INPUT
+POST /reservations -> 201 DRAFT
+GET /availability -> 200 true
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/confirm -> 200 PENDING_APPROVAL
+GET /availability -> 200 true
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/confirm -> 409 INVALID_STATE
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/approve -> 403 FORBIDDEN
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/approve -> 200 CONFIRMED
+GET /availability -> 200 false
+POST /reservations -> 201 DRAFT
+POST /reservations/c582a112-0e59-4765-b1ea-9369590ba851/confirm -> 200 PENDING_APPROVAL
+POST /reservations/c582a112-0e59-4765-b1ea-9369590ba851/approve -> 409 RESERVATION_CONFLICT
+GET /reservations/c582a112-0e59-4765-b1ea-9369590ba851 -> 200 PENDING_APPROVAL
+POST /reservations/c582a112-0e59-4765-b1ea-9369590ba851/reject -> 200 REJECTED
+POST /reservations/c582a112-0e59-4765-b1ea-9369590ba851/approve -> 409 INVALID_STATE
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/cancel -> 200 CANCELLED
+GET /availability -> 200 true
+POST /reservations/78375031-ef80-4150-a55a-766ead0be0b6/cancel -> 200 CANCELLED
+POST /reservations/00000000-0000-4000-8000-000000000098/cancel -> 404 RESERVATION_NOT_FOUND
+POST /reservations -> 201 DRAFT
+POST /reservations/44747494-3eef-46f9-8037-e64e277c8891/confirm -> 200 PENDING_APPROVAL
+POST /reservations/44747494-3eef-46f9-8037-e64e277c8891/cancel -> 200 CANCELLED
+C02 v0.2: base operations, approval, rejection and conflict demonstrated successfully. Exact expiry is demonstrated by npm test.
+GET /reservations/78375031-ef80-4150-a55a-766ead0be0b6 -> 200 CANCELLED
+GET /reservations/c582a112-0e59-4765-b1ea-9369590ba851 -> 200 REJECTED
+GET /reservations/44747494-3eef-46f9-8037-e64e277c8891 -> 200 CANCELLED
+
+# NotificationOutbox after the demo (psql)
+            reservationId             | reservation | delivery | attempts | sent 
+--------------------------------------+-------------+----------+----------+------
+ 78375031-ef80-4150-a55a-766ead0be0b6 | CANCELLED   | SENT     |        1 | t
+(1 row)
+
+# API process log (stub gateway called by the dispatcher, not by the HTTP handler)
+BookerDoc API: http://localhost:3000
+{
+  event: 'notification_stub_accepted',
+  reservationId: '78375031-ef80-4150-a55a-766ead0be0b6'
+}

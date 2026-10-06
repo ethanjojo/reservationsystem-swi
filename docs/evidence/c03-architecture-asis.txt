@@ -1,0 +1,95 @@
+# C03 L2: architecture.test.ts run against AS-IS source (git archive b44c2e2 apps/api/src). Expected to FAIL.
+
+ RUN  v5.0.1 C:/Users/Stepan03/Documents/swi/reservationsystem-swi/apps/api
+
+ × tests-asis/architecture-asis.test.ts > C03 architecture conformance > scans the real source tree 12ms
+   → expected [ 'actors.ts', 'app.ts', …(8) ] to deeply equal ArrayContaining{…}
+ × tests-asis/architecture-asis.test.ts > C03 architecture conformance > ADR-006: HTTP layer and reservation logic never call the notification provider 2ms
+   → expected [ 'app.ts' ] to deeply equal []
+ × tests-asis/architecture-asis.test.ts > C03 architecture conformance > ADR-007: only reservations/lifecycle.ts decides Reservation status, without I/O 1ms
+   → expected [ …(2) ] to deeply equal []
+ ✓ tests-asis/architecture-asis.test.ts > C03 architecture conformance > the checks detect violations (guards against a vacuous rule) 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests-asis/architecture-asis.test.ts > C03 architecture conformance > scans the real source tree
+AssertionError: expected [ 'actors.ts', 'app.ts', …(8) ] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
++ [
++   "actors.ts",
+    "app.ts",
+-   "reservations/lifecycle.ts",
+-   "notifications/outbox.ts",
++   "notifications/notification-service.ts",
++   "notifications/notification-stub.ts",
++   "reservations/create.ts",
++   "reservations/errors.ts",
++   "reservations/input.ts",
++   "reservations/repository.ts",
++   "reservations/scheduling.ts",
++   "server.ts",
+  ]
+
+ ❯ tests-asis/architecture-asis.test.ts:48:42
+     46|   const files = sources();
+     47|   it("scans the real source tree", () => {
+     48|     expect(files.map(file => file.path)).toEqual(expect.arrayContainin…
+       |                                          ^
+     49|   });
+     50|   it("ADR-006: HTTP layer and reservation logic never call the notific…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests-asis/architecture-asis.test.ts > C03 architecture conformance > ADR-006: HTTP layer and reservation logic never call the notification provider
+AssertionError: expected [ 'app.ts' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "app.ts",
++ ]
+
+ ❯ tests-asis/architecture-asis.test.ts:51:50
+     49|   });
+     50|   it("ADR-006: HTTP layer and reservation logic never call the notific…
+     51|     expect(notificationGatewayViolations(files)).toEqual([]);
+       |                                                  ^
+     52|   });
+     53|   it("ADR-007: only reservations/lifecycle.ts decides Reservation stat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests-asis/architecture-asis.test.ts > C03 architecture conformance > ADR-007: only reservations/lifecycle.ts decides Reservation status, without I/O
+AssertionError: expected [ …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "reservations/create.ts: status literal",
++   "reservations/lifecycle.ts: missing",
++ ]
+
+ ❯ tests-asis/architecture-asis.test.ts:54:49
+     52|   });
+     53|   it("ADR-007: only reservations/lifecycle.ts decides Reservation stat…
+     54|     expect(lifecycleOwnershipViolations(files)).toEqual([]);
+       |                                                 ^
+     55|   });
+     56|   it("the checks detect violations (guards against a vacuous rule)", (…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  13:20:36
+   Duration  261ms (import 42%, transform 35%, tests 18%, worker 6%)
+

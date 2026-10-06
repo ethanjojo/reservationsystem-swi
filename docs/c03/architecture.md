@@ -23,14 +23,39 @@ Drivery neurčují řešení. Transakce, outbox, worker, constraint apod. jsou m
 ```mermaid
 classDiagram
   direction LR
-  class Patient { email }
-  class Doctor { name; requiresApproval }
-  class Service { name; durationMinutes }
-  class WorkingWindow { weekday; startMinute; endMinute }
-  class Reservation { status }
-  class TimeInterval { <<value object>> start; end  «[start,end)» }
-  class ApprovalRequest { <<value object>> requestedAt; expiresAt }
-  class ConfirmationNotification { recipient; deliveryState }
+  class Patient {
+    email
+  }
+  class Doctor {
+    name
+    requiresApproval
+  }
+  class Service {
+    name
+    durationMinutes
+  }
+  class WorkingWindow {
+    weekday
+    startMinute
+    endMinute
+  }
+  class Reservation {
+    status
+  }
+  class TimeInterval {
+    <<value object>>
+    start
+    end
+  }
+  class ApprovalRequest {
+    <<value object>>
+    requestedAt
+    expiresAt
+  }
+  class ConfirmationNotification {
+    recipient
+    deliveryState
+  }
   Patient "1" -- "0..*" Reservation : vlastní
   Doctor "1" -- "0..*" Reservation : je Resource pro
   Service "1" -- "0..*" Reservation : typ
@@ -232,7 +257,7 @@ sequenceDiagram
   participant GW as Notification Gateway
   L->>API: POST /reservations/{id}/approve
   API->>SVC: changeReservation(id, actor, "approve")
-  SVC->>DB: BEGIN; SELECT … FOR UPDATE
+  SVC->>DB: BEGIN + SELECT … FOR UPDATE
   SVC->>LC: authorize(actor, row, "approve")
   SVC->>LC: decide(row, "approve", now)
   LC-->>SVC: needsSchedule (PENDING_APPROVAL, now < expiresAt)
@@ -274,7 +299,11 @@ classDiagram
     status: ReservationStatus
     approvalRequestedAt; approvalExpiresAt
   }
-  class Actor { <<value object>> role; id }
+  class Actor {
+    <<value object>>
+    role
+    id
+  }
   class ReservationLifecycle {
     <<domain module>>
     +INITIAL_STATE: StateChange
@@ -286,8 +315,16 @@ classDiagram
     +allocate(row, op, time, schedule) StateChange
     +expireIfDue(row, time) StateChange?
   }
-  class Decision { <<union>> expire | unchanged | change | needsSchedule }
-  class StateChange { <<value object>> status; approvalRequestedAt?; approvalExpiresAt? }
+  class Decision {
+    <<union>>
+    expire | unchanged | change | needsSchedule
+  }
+  class StateChange {
+    <<value object>>
+    status
+    approvalRequestedAt?
+    approvalExpiresAt?
+  }
   class ReservationService {
     <<application service>>
     +createDraft(input, actor)
@@ -305,8 +342,19 @@ classDiagram
     +dispatchPendingNotifications(db, gateway, options) DispatchResult
     +startOutboxDispatcher(db, gateway, options) Stopper
   }
-  class NotificationService { <<interface>> +sendReservationConfirmation(message) }
-  class ReservationConfirmation { <<value object>> reservationId; recipient; doctorName; serviceName; startsAt; endsAt }
+  class NotificationService {
+    <<interface>>
+    +sendReservationConfirmation(message)
+  }
+  class ReservationConfirmation {
+    <<value object>>
+    reservationId
+    recipient
+    doctorName
+    serviceName
+    startsAt
+    endsAt
+  }
   ReservationService ..> ReservationLifecycle : rozhodnutí
   ReservationService ..> SchedulingAvailability : interval, okna
   ReservationService ..> NotificationOutbox : enqueue v tx
@@ -351,3 +399,47 @@ NotificationOutbox; `sendReservationConfirmation` → NotificationService.
 | oprávnění (BR-05) | `requirePatient` v `actors.ts` + inline podmínky v `create.ts` | `lifecycle.ts` (`authorize`, `authorizeCreate`, `canRead`) | **CHANGE** |
 | HTTP kontrakt API | 4 mutace + read + availability | beze změny | **VERIFY** (C02 testy) |
 | směry závislostí | neověřeno | jen povolené směry z G2 | **VERIFY** (L2 test) |
+
+## K. Úprava implementace
+
+Provedeny všechny řádky CHANGE z J (commit `1e11105`):
+
+| Řádek J | Změna v kódu |
+|---|---|
+| odeslání notifikace | `app.ts` už nepřijímá `notifications` ani nevolá dodavatele; `reservation-service.ts` volá `enqueueConfirmation(tx, …)` ve stejné transakci jako CONFIRMED |
+| evidence požadavků | migrace `20261006111636_notification_outbox` (tabulka `NotificationOutbox`, enum `OutboxStatus`, `UNIQUE(reservationId, kind)`, index `(status, nextAttemptAt)`); `notifications/outbox.ts` (`enqueueConfirmation`, `dispatchPendingNotifications`, `startOutboxDispatcher`); dispatcher startuje a zastavuje se v `server.ts` |
+| rozhodování o přechodech, status literály, oprávnění | nový čistý modul `reservations/lifecycle.ts` (`authorizeCreate`, `authorize`, `canRead`, `decide`, `allocate`, `expireIfDue`, `INITIAL_STATE`, `BLOCKING_STATUS`); `create.ts` → `reservation-service.ts` pouze aplikuje `StateChange`; `requirePatient` odstraněn z `actors.ts` |
+| interval / dostupnost | `reservations/availability.ts` (`scheduleInterval`, `checkAvailability` s `BLOCKING_STATUS`) |
+
+HTTP kontrakt (cesty, kódy, tělo odpovědí) se nezměnil; Specification Baseline v0.2 zůstává platná.
+
+## L1. Ověření chování
+
+`npm run typecheck`, `npm test` (78/78) a `npm run build` prošly — [c03-tests.txt](../evidence/c03-tests.txt).
+Živé HTTP demo `npm run demo:c02` proti sestavenému API s běžícím dispatcherem — [c03-demo.txt](../evidence/c03-demo.txt).
+
+| Ověření | Výsledek | Doklad |
+|---|---|---|
+| success path: Confirm → PENDING_APPROVAL → Approve → CONFIRMED, notifikace doručena | prošlo; v DB právě 1 outbox řádek `SENT`, stub zalogoval `notification_stub_accepted` z dispatcheru | test `REQ-08: only the owning doctor can approve, exactly once`; c03-demo.txt (výpis `NotificationOutbox` a log procesu) |
+| failure: dodavatel selže | Confirm vrací 200 a zůstává CONFIRMED; řádek `PENDING`, `attempts=1`, `nextAttemptAt = +30 s`; před uplynutím se neopakuje, po něm `SENT`; po 8 neúspěších `FAILED` a rezervace stále CONFIRMED | testy `records the notification request with CONFIRMED; provider failure preserves success and is retried`, `exhausted retries mark FAILED and never change the reservation` |
+| failure: nový proces | jiná instance Prisma clientu (simulace restartu) doručí čekající požadavek | test `a request survives a fresh process` |
+| concurrency / boundary: kolidující Approve | jedno CONFIRMED, druhé zůstává PENDING_APPROVAL, právě 1 notifikace; kolize rollbackne i outbox | testy `REQ-09: concurrent conflicting approvals…`, `a BR-02 conflict rolls back the notification request…`; demo `approve -> 409 RESERVATION_CONFLICT` |
+| concurrency: 3 souběžné dispatchery | každý požadavek doručen právě jednou (`FOR UPDATE SKIP LOCKED`) | test `concurrent dispatchers deliver each request once` |
+| boundary: deadline BR-08, 24h BR-03 | beze změny proti C02 (přesná hranice, ms) | C02 testy `REQ-11…`, `REQ-05…` a nové čisté testy `tests/lifecycle.test.ts` |
+
+## L2. Architektonické pravidlo
+
+**Architektonická pravidla (z ADR-006 a ADR-007 / G2):**
+1. Notification Gateway (`notification-service`, `notification-stub`) smí importovat jen `src/notifications/**` a kompoziční
+   kořen `server.ts`; nikdo jiný nevolá `sendReservationConfirmation` (HTTP vrstva ani rezervační logika na dodavatele nesahají).
+2. Hodnoty `Reservation.status` se v `src/` vyskytují jen v `reservations/lifecycle.ts` a ten nemá žádný runtime import mimo `reservations/`.
+
+**Kontrola:** `apps/api/tests/architecture.test.ts` — statická analýza zdrojů `src/` (bez generovaného klienta), součást
+`npm test` a tedy i CI. Obsahuje i negativní test, že kontrola na syntetickém porušení opravdu selže.
+
+**Výsledek:**
+- TO-BE (commit `1e11105`): 4/4 prošly — [c03-tests.txt](../evidence/c03-tests.txt).
+- Stejný test spuštěný proti AS-IS zdrojům `b44c2e2`: **3 ze 4 selhaly** — pravidlo 1: `app.ts`; pravidlo 2:
+  `reservations/create.ts: status literal`, `reservations/lifecycle.ts: missing`; kontrola stromu: chybí `lifecycle.ts`
+  a `outbox.ts` — [c03-architecture-asis.txt](../evidence/c03-architecture-asis.txt).
+  Kontrola tedy rozliší AS-IS od TO-BE.
