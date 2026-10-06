@@ -1,14 +1,14 @@
 import express, { type ErrorRequestHandler, type Request } from "express";
 import { z } from "zod";
 import type { PrismaClient, Reservation } from "./generated/prisma/client.js";
-import type { NotificationService } from "./notifications/notification-service.js";
 import type { Actor } from "./actors.js";
 import { reservationInput } from "./reservations/input.js";
-import { createDraft, checkAvailability, changeReservation, readReservation } from "./reservations/create.js";
+import { createDraft, changeReservation, readReservation } from "./reservations/reservation-service.js";
+import { checkAvailability } from "./reservations/availability.js";
 import { ReservationError } from "./reservations/errors.js";
 export interface AppDependencies {
-  db: PrismaClient; notifications: NotificationService; now?: () => Date;
-  actors?: ReadonlyMap<string, Actor>; logger?: Pick<Console, "warn" | "error">;
+  db: PrismaClient; now?: () => Date;
+  actors?: ReadonlyMap<string, Actor>; logger?: Pick<Console, "error">;
 }
 function output(row: Reservation) { return { id: row.id, status: row.status, startsAt: row.startsAt, endsAt: row.endsAt,
   approvalRequestedAt: row.approvalRequestedAt, approvalExpiresAt: row.approvalExpiresAt }; }
@@ -18,7 +18,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 const availabilityInput = reservationInput.omit({ patientId: true });
-export function createApp({ db, notifications, now = () => new Date(), actors = new Map(), logger = console }: AppDependencies) {
+export function createApp({ db, now = () => new Date(), actors = new Map(), logger = console }: AppDependencies) {
   const app = express(); app.disable("x-powered-by"); app.use(express.json({ limit: "16kb" }));
   const actor = (req: Request) => {
     const header = req.header("authorization");
@@ -40,12 +40,8 @@ export function createApp({ db, notifications, now = () => new Date(), actors = 
   for (const operation of ["confirm", "cancel", "approve", "reject"] as const) {
     app.post(`/reservations/:id/${operation}`, async (req, res) => {
       const identity = actor(req); parse(z.strictObject({}), req.body ?? {});
-      const result = await changeReservation(db, parse(z.uuid(), req.params.id), identity, operation, now);
-      if (result.confirmation) {
-        try { await notifications.sendReservationConfirmation(result.confirmation); }
-        catch { logger.warn({ event: "notification_failed", reservationId: result.reservation.id }); }
-      }
-      res.json(output(result.reservation));
+      // Confirmation notifications are delivered by the outbox dispatcher (ADR-006), not by the HTTP layer.
+      res.json(output(await changeReservation(db, parse(z.uuid(), req.params.id), identity, operation, now)));
     });
   }
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {

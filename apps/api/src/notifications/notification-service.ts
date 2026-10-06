@@ -1,4 +1,4 @@
-/** Boundary contract for CP1. C01 does not send real email. */
+/** Notification Gateway port: the only place that knows the provider contract. The demo uses a stub, not real email. */
 export interface ReservationConfirmation {
   reservationId: string;
   recipient: string;
@@ -9,6 +9,6 @@ export interface ReservationConfirmation {
 }
 
 export interface NotificationService {
-  /** Call after the reservation transaction commits. Rejection does not cancel it. */
+  /** Called only by the outbox dispatcher (ADR-006), after commit. May be retried: implementations must deduplicate by reservationId. */
   sendReservationConfirmation(message: ReservationConfirmation): Promise<void>;
 }
