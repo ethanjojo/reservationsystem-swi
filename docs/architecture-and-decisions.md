@@ -190,3 +190,67 @@ Notification port = `notification-service.ts`, `notification-stub.ts`.
 
 Vedlejší nález pro C03: rozhodování o přechodech stavu je roztroušené v `changeReservation`/`readReservation` a promíchané s I/O
 (šest zápisů status literálů, duplicitní expirace), takže statechart v0.2 nemá v kódu jednoho vlastníka.
+
+---
+
+# C03 — rozhodnutí
+
+Plný postup (drivery, odpovědnosti, alternativy, scénář, pohledy) je v [c03/architecture.md](c03/architecture.md).
+
+## ADR-006 — Doručení potvrzovací notifikace: transakční outbox
+
+**Kontext:** Část A ukázala, že potvrzovací notifikaci posílá HTTP handler (`app.ts:43-46`) po commitu a chybu jen
+zaloguje. Po zavedení schvalování (v0.2) přichází CONFIRMED v requestu lékaře, často dlouho po žádosti pacienta;
+e-mail je jediný kanál, kterým se pacient o přijetí dozví. ADR-004 tento dluh odložil „před produkční provoz“.
+
+**Drivery:** D3 (oddělené a spolehlivé doručení notifikace), D2 (odložené schválení přežívá request a restart),
+D1 (notifikace jen pro skutečně commitnutou alokaci, i při souběhu).
+
+**Alternativa A:** synchronní best-effort volání dodavatele v aplikační službě po commitu (pouze přesun z HTTP vrstvy).
+**Alternativa B:** transakční outbox — Reservation Service zapíše řádek `NotificationOutbox` ve stejné transakci jako
+přechod do CONFIRMED; Outbox Dispatcher (smyčka v témže procesu) řádky claimuje přes `FOR UPDATE SKIP LOCKED`,
+odešle přes `NotificationService` a označí `SENT`, při chybě naplánuje retry s exponenciálním backoffem, po
+vyčerpání pokusů `FAILED`.
+
+**Rozhodnutí:** Alternativa B.
+
+**Důvod:** jen B zaručuje, že požadavek na notifikaci existuje právě tehdy, když existuje CONFIRMED (atomicita jedné
+DB transakce, rollback při kolizi BR-02 zahodí i požadavek), a že výpadek dodavatele nebo pád procesu zprávu neztratí.
+Odpověď Approve/Confirm nečeká na dodavatele. Nevyžaduje novou infrastrukturu — používá existující PostgreSQL.
+
+**Přijaté negativní důsledky:**
+- doručení je **at-least-once**: pád mezi odesláním a označením `SENT` vede k opakovanému odeslání; dodavatel musí
+  deduplikovat podle `reservationId` (idempotency key) — pro stub to neplatí, pro reálného dodavatele je to podmínka;
+- nová tabulka, migrace a polling smyčka (každé 2 s jeden krátký dotaz, i když nic nečeká);
+- parametry retry (max. 8 pokusů, backoff 30 s · 2^(n−1) se stropem 1 h, lease 60 s) jsou **provizorní předpoklad**
+  bez zdroje v požadavcích; tým je potvrdí s reálným dodavatelem;
+- záznam `FAILED` zatím nikdo aktivně nesleduje (žádný alert ani admin UI);
+- notifikace je doručena se zpožděním až do jednoho polling intervalu.
+
+**Rozhodnutí znovu otevřeme, když:** systém poběží ve více instancích s požadavkem na nízkou latenci doručení
+(→ LISTEN/NOTIFY nebo broker), přibydou další typy událostí pro jiné konzumenty (→ event bus), objem outboxu
+začne zatěžovat hlavní DB, nebo dodavatel nabídne transakční/idempotentní API, které změní poměr rizik.
+
+## ADR-007 — Jediný vlastník přechodů životního cyklu Reservation
+
+**Kontext:** Část A5: rozhodování o přechodech je inline v `changeReservation`, expirace je zkopírovaná do
+`readReservation`, oprávnění je zčásti v `actors.ts`, status literály se zapisují na šesti místech. Změna C02
+(schvalování) musela upravit všechna tato místa.
+
+**Drivery:** D4 (jeden vlastník statechartu), D2 (deadline žádosti), D1 (blokující stav pro BR-02).
+
+**Alternativa A:** ponechat pravidla v aplikační službě (transakční skript), jen ji rozdělit na funkce.
+**Alternativa B:** čistý doménový modul `Reservation Lifecycle` bez I/O, který vrací rozhodnutí (`Decision`,
+`StateChange`); aplikační služba pouze zamyká, načítá, volá Lifecycle a aplikuje výsledek.
+
+**Rozhodnutí:** Alternativa B.
+
+**Důvod:** statechart v0.2 má v kódu právě jednoho vlastníka; přechody jsou testovatelné bez databáze;
+expirace a oprávnění mají jedinou definici; pravidlo lze strojově ověřit (status literály jen v `lifecycle.ts`).
+
+**Přijaté negativní důsledky:** alokace se rozhoduje ve dvou krocích (`decide` → `needsSchedule` → `allocate`),
+protože pracovní okna jsou I/O; autoritativní kontrola kolize zůstává v DB constraintu, nikoli v Lifecycle;
+`ReservationError` nese HTTP status i v doménovém modulu (známý kompromis, odděleno později).
+
+**Rozhodnutí znovu otevřeme, když:** přechody začnou vyžadovat data, která nejde předat jako vstup (např. kapacitní
+Resource), nebo vznikne druhý zapisovatel stavu mimo Reservation Service (job, jiná služba).
