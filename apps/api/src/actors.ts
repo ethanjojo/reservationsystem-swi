@@ -1,8 +1,5 @@
-import { ReservationError } from "./reservations/errors.js";
+/** Identity: maps a demo bearer token to an Actor. Authorization rules (BR-05) live in reservations/lifecycle.ts. */
 export type Actor = { role: "patient" | "doctor"; id: string };
-export function requirePatient(actor: Actor, patientId: string) {
-  if (actor.role !== "patient" || actor.id !== patientId) throw new ReservationError(403, "FORBIDDEN");
-}
 export function demoActors(): Map<string, Actor> {
   const actors = new Map<string, Actor>();
   const patient = process.env.DEMO_PATIENT_TOKEN, doctor = process.env.DEMO_DOCTOR_TOKEN;

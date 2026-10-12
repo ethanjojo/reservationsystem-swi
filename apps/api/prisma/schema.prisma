@@ -68,7 +68,31 @@ model Reservation {
   approvalExpiresAt DateTime? @db.Timestamptz(3)
   status ReservationStatus @default(DRAFT)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  notifications NotificationOutbox[]
   @@index([doctorId, startsAt])
   @@index([patientId])
   @@index([serviceId])
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// ADR-006: notification requests written in the same transaction as the state change.
+model NotificationOutbox {
+  id String @id @default(uuid()) @db.Uuid
+  reservationId String @db.Uuid
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  kind String
+  payload Json
+  status OutboxStatus @default(PENDING)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @db.Timestamptz(3)
+  lastError String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  sentAt DateTime? @db.Timestamptz(3)
+  @@unique([reservationId, kind])
+  @@index([status, nextAttemptAt])
 }

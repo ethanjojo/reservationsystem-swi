@@ -171,3 +171,64 @@ Tým musí schválit politiku neblokujícího čekání a platnosti min(24h, za�
 - `c02-v0.2`: schvalování, odmítnutí, expirace, rozšířené testy a tato evidence; navazující PR má base v0.1.
 
 Tagy jsou reprodukovatelné snapshoty, nikoli záznamy týmového schválení. Před C03 zbývá skutečné týmové review specifikace a následné sloučení PR ve správném pořadí.
+
+## C03 — Architecture Evidence
+
+**Baseline:** [Specification Baseline v0.2](c02/v02.md) — beze změny pozorovatelného kontraktu.
+
+**Part A:** [AS-IS realizace Confirm → Approve](architecture-and-decisions.md#c03-část-a--as-is-realizace-scénáře-approve-reservation)
+(mapování kroků na kód, větev kolize, stav/pravidlo BR-02, závislosti, AS-IS diagram). Nález: notifikaci posílá HTTP
+handler best-effort po commitu (ztráta při selhání); přechody stavu nemají jednoho vlastníka (6 zápisů status literálů).
+
+**Drivers:** D1 konzistentní alokace při souběhu (BR-02, REQ-04/09); D2 trvalé odložené schválení (BR-08, REQ-07/11);
+D3 oddělené a spolehlivé doručení notifikace (BR-07, ADR-004); D4 jeden vlastník statechartu — [B](c03/architecture.md#b-architektonické-drivery).
+
+**Decision question:** Kde a jak zajistit doručení potvrzovací notifikace, aby její selhání nezměnilo výsledek
+Confirm/Approve a požadavek se neztratil?
+
+**Alternatives:** A — synchronní best-effort volání v aplikační službě po commitu; B — transakční outbox + dispatcher
+— [E1/E2](c03/architecture.md#e1-dvě-materiálně-odlišné-alternativy).
+
+**Scenario walkthrough:** Confirm → PENDING_APPROVAL → konec requestu → pozdější Approve → dodavatel nedostupný /
+pád procesu / souběžné Approve; A zprávu ztratí, B ji doručí později nebo označí FAILED — [E3](c03/architecture.md#e3-průchod-scénářem-confirm--approve-dodavatel-e-mailu-je-nedostupný).
+
+**ADR:** [ADR-006 transakční outbox](architecture-and-decisions.md#adr-006--doručení-potvrzovací-notifikace-transakční-outbox);
+doplňkové [ADR-007 jediný vlastník přechodů](architecture-and-decisions.md#adr-007--jediný-vlastník-přechodů-životního-cyklu-reservation).
+
+**Views** (vše v [c03/architecture.md](c03/architecture.md), Mermaid):
+- domain class — C1
+- context — G1
+- static architecture — G2
+- state ownership — G3
+- runtime/deployment — G4
+- design sequence — H1 (Approve, alt kolize, asynchronní dispatch)
+- focused design class — H2
+
+**Cross-view issues found/resolved:** oprávnění mělo dva vlastníky (Identity `requirePatient` + inline) → celé BR-05 do
+Lifecycle; blokující stav BR-02 duplikován v Availability → závislost na `BLOCKING_STATUS`; outbox potřebuje runtime
+aktivitu mimo request → Dispatcher explicitně v G4 a `server.ts`; stavy doručení nepatří do statechartu Reservation → vlastník Outbox (G3) — [I](c03/architecture.md#i-cross-view-kontrola-provedena-před-změnou-kódu).
+
+**AS-IS → TO-BE delta:** CHANGE — odeslání notifikace, evidence požadavků (outbox), rozhodování o přechodech, status
+literály, oprávnění, interval/dostupnost; KEEP — DB exclusion constraint, zámek řádku a čas po zámku, demo identita;
+VERIFY — HTTP kontrakt (C02 testy), směry závislostí (L2) — [J](c03/architecture.md#j-as-is--to-be-delta).
+
+**Implementation changes:** commit `1e11105` — `notifications/outbox.ts`, migrace `20261006111636_notification_outbox`,
+`reservations/lifecycle.ts`, `reservations/availability.ts`, `create.ts` → `reservation-service.ts`, `app.ts` bez notifikací,
+dispatcher v `server.ts` — [K](c03/architecture.md#k-úprava-implementace).
+
+**Behaviour verification:** 78/78 testů = 63 C02 testů (notifikace nyní ověřované přes dispatcher)
++ 5 outbox + 6 lifecycle + 4 architecture, typecheck, build — [c03-tests.txt](evidence/c03-tests.txt); živé demo
+v0.2 se shodným výstupem jako C02 a jedním `SENT` požadavkem v outboxu — [c03-demo.txt](evidence/c03-demo.txt); tabulka [L1](c03/architecture.md#l1-ověření-chování).
+
+**Architecture conformance rule + result:** (1) jen `notifications/**` a `server.ts` smí sahat na Notification Gateway;
+(2) status `Reservation` jen v `reservations/lifecycle.ts`, bez I/O. Kontrola `apps/api/tests/architecture.test.ts`
+(součást `npm test` a CI): TO-BE 4/4 zelené; proti AS-IS `b44c2e2` 3 ze 4 červené — [c03-architecture-asis.txt](evidence/c03-architecture-asis.txt).
+
+**Remaining uncertainty / risk:**
+- doručení je at-least-once; reálný dodavatel musí deduplikovat podle `reservationId`; odeslání delší než lease (60 s) může vést k duplicitě;
+- parametry retry (8 pokusů, backoff 30 s·2^(n−1) max. 1 h, polling 2 s) jsou provizorní, bez zdroje v požadavcích;
+- stav `FAILED` nikdo aktivně nesleduje (žádný alert ani admin pohled);
+- dispatcher běží v jediném API procesu; škálování na více instancí je bezpečné (`SKIP LOCKED`), ale netestované v nasazení;
+- `ReservationError` nese HTTP status i v doménovém Lifecycle; expirace zůstává on-access (bez časovače); identita je stále demo.
+
+**Commit/tag:** implementace `1e11105`, evidence a tag `c03-architecture` na větvi `codex/c03-architecture`.

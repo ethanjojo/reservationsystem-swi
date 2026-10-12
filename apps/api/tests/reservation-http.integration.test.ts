@@ -4,7 +4,8 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { createApp } from "../src/app.js";
-import type { ReservationConfirmation } from "../src/notifications/notification-service.js";
+import type { NotificationService, ReservationConfirmation } from "../src/notifications/notification-service.js";
+import { dispatchPendingNotifications } from "../src/notifications/outbox.js";
 
 const connectionString = process.env.TEST_DATABASE_URL;
 if (!connectionString || new URL(connectionString).pathname !== "/bookerdoc_test") throw new Error("Use npm test");
@@ -18,7 +19,14 @@ const app = () => createApp({ db, now: () => instant, actors: new Map([
   ["other", { role: "patient" as const, id: "00000000-0000-4000-8000-000000000099" }],
   ["other-doctor", { role: "doctor" as const, id: "00000000-0000-4000-8000-000000000098" }],
   ["doctor", { role: "doctor" as const, id: doctorId }],
-]), notifications: { async sendReservationConfirmation(message) { delivered.push(message); } } });
+]) });
+const quiet = { warn() {} };
+const recorder: NotificationService = { async sendReservationConfirmation(message) { delivered.push(message); } };
+/** Runs the outbox dispatcher once (ADR-006) and returns everything delivered so far. */
+const deliver = async (gateway = recorder) => {
+  await dispatchPendingNotifications(db, gateway, { now: () => instant, logger: quiet }); return delivered;
+};
+const outbox = () => db.notificationOutbox.findMany({ where: { reservation: { patientId } }, orderBy: { createdAt: "asc" } });
 const post = (path: string, body = {}, token = "patient") => request(app()).post(path).set("Authorization", `Bearer ${token}`).send(body);
 const get = (path: string, token = "patient") => request(app()).get(path).set("Authorization", `Bearer ${token}`);
 const create = async () => (await post("/reservations", payload()).expect(201)).body;
@@ -46,7 +54,7 @@ afterEach(async () => {
 describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
   it("REQ-01: creates a persistent DRAFT without allocation or notification", async () => {
     const draft = await create();
-    expect(draft.status).toBe("DRAFT"); expect(delivered).toEqual([]);
+    expect(draft.status).toBe("DRAFT"); expect(await deliver()).toEqual([]);
     expect(await db.reservation.findUnique({ where: { id: draft.id } })).toMatchObject({ status: "DRAFT", patientId });
     expect((await availability().expect(200)).body.available).toBe(true);
   });
@@ -81,7 +89,7 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
     const first = await create(); await confirm(first.id).expect(200);
     const second = await create(); await confirm(second.id).expect(409);
     expect(await db.reservation.findUnique({ where: { id: second.id } })).toMatchObject({ status: "DRAFT" });
-    expect(delivered).toHaveLength(1);
+    expect(await deliver()).toHaveLength(1);
   });
   it("REQ-04: concurrent conflicting confirms allocate at most once", async () => {
     const a = await create(), b = await create();
@@ -92,7 +100,7 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
   it("same-reservation confirm race sends only one notification", async () => {
     const draft = await create();
     expect((await Promise.all([confirm(draft.id), confirm(draft.id)])).map(r => r.status).sort()).toEqual([200,409]);
-    expect(delivered).toHaveLength(1);
+    expect(await deliver()).toHaveLength(1);
   });
   it("confirms stored duration even after the service duration changes", async () => {
     const draft = await create();
@@ -142,18 +150,25 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
     await post(`/reservations/${draft.id}/cancel`, {}, "other").expect(403);
     await request(app()).get(`/reservations/${draft.id}`).set("Authorization", "Bearer other").expect(403);
   });
-  it("only notifies after commit, and notification failure preserves success", async () => {
+  it("records the notification request with CONFIRMED; provider failure preserves success and is retried", async () => {
     const draft = await create(); let observed: string | undefined;
-    const reader = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-    try {
-      const api = createApp({ db, now: () => instant, actors: new Map([["patient", { role: "patient", id: patientId }]]),
-        logger: { warn() {}, error: console.error }, notifications: { async sendReservationConfirmation(message) {
-          observed = (await reader.reservation.findUniqueOrThrow({ where: { id: message.reservationId } })).status;
-          throw new Error("simulated failure");
-        } } });
-      await request(api).post(`/reservations/${draft.id}/confirm`).set("Authorization", "Bearer patient").expect(200);
-      expect(observed).toBe("CONFIRMED");
-    } finally { await reader.$disconnect(); }
+    await confirm(draft.id).expect(200);
+    expect(await outbox()).toMatchObject([{ reservationId: draft.id, status: "PENDING", attempts: 0 }]);
+    const failing: NotificationService = { async sendReservationConfirmation(message) {
+      observed = (await db.reservation.findUniqueOrThrow({ where: { id: message.reservationId } })).status;
+      throw new Error("simulated failure");
+    } };
+    await deliver(failing);
+    expect(observed).toBe("CONFIRMED");
+    const [retry] = await outbox();
+    expect(retry).toMatchObject({ status: "PENDING", attempts: 1, lastError: "simulated failure" });
+    expect(retry!.nextAttemptAt).toEqual(new Date(instant.getTime() + 30_000));
+    expect(await deliver()).toHaveLength(0); // not due before the backoff elapses
+    instant = new Date(instant.getTime() + 30_000);
+    expect(await deliver()).toMatchObject([{ reservationId: draft.id, recipient: `${patientId}@example.test`,
+      doctorName: "Doctor", serviceName: "Consultation", startsAt: new Date(draft.startsAt), endsAt: new Date(draft.endsAt) }]);
+    expect(await outbox()).toMatchObject([{ status: "SENT", attempts: 2 }]);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("CONFIRMED");
   });
 });
 
@@ -171,7 +186,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     const row = await pending();
     expect(row).toMatchObject({ status: "PENDING_APPROVAL", approvalRequestedAt: "2030-01-01T00:00:00.000Z", approvalExpiresAt: "2030-01-02T00:00:00.000Z" });
     expect((await availability().expect(200)).body.available).toBe(true);
-    expect(delivered).toHaveLength(0);
+    expect(await deliver()).toHaveLength(0);
     await confirm(row.id).expect(409);
     expect((await read(row.id, "doctor").expect(200)).body.status).toBe("PENDING_APPROVAL");
   });
@@ -184,7 +199,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     expect((await approve(row.id).expect(200)).body.status).toBe("CONFIRMED");
     expect((await availability().expect(200)).body.available).toBe(false);
     await approve(row.id).expect(409); await reject(row.id).expect(409);
-    expect(delivered).toHaveLength(1);
+    expect(await deliver()).toHaveLength(1);
   });
   it("REQ-09: concurrent conflicting approvals confirm one and preserve the other request", async () => {
     const a = await pending(), b = await pending();
@@ -192,7 +207,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     expect(results.map(r => r.status).sort()).toEqual([200,409]);
     const rows = await db.reservation.findMany({ where: { patientId } });
     expect(rows.map(r => r.status).sort()).toEqual(["CONFIRMED", "PENDING_APPROVAL"]);
-    expect(delivered).toHaveLength(1);
+    expect(await deliver()).toHaveLength(1);
   });
   it("REQ-10: rejection is persistent and terminal without allocation or notification", async () => {
     const row = await pending();
@@ -200,7 +215,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     expect((await read(row.id).expect(200)).body.status).toBe("REJECTED");
     await reject(row.id).expect(409); await approve(row.id).expect(409); await cancel(row.id).expect(409);
     expect((await availability().expect(200)).body.available).toBe(true);
-    expect(delivered).toHaveLength(0);
+    expect(await deliver()).toHaveLength(0);
   });
   it("REQ-11: deadline is exact and survives a fresh app instance", async () => {
     const row = await pending();
@@ -212,7 +227,7 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     expect((await db.reservation.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("EXPIRED");
     await approve(row.id).expect(409); await reject(row.id).expect(409); await cancel(row.id).expect(409);
     expect((await availability().expect(200)).body.available).toBe(true);
-    expect(delivered).toHaveLength(0);
+    expect(await deliver()).toHaveLength(0);
   });
   it.each(["approve", "reject", "cancel", "confirm"])("REQ-11: %s commits expiry despite returning 409", async operation => {
     const row = await pending(); instant = new Date("2030-01-02T00:00:00Z");
@@ -288,5 +303,49 @@ describe("C02 baseline v0.2 — approval, rejection and expiry", () => {
     await db.doctor.update({ where: { id: doctorId }, data: { requiresApproval: false } });
     await confirm(row.id).expect(409);
     expect((await approve(row.id).expect(200)).body.status).toBe("CONFIRMED");
+  });
+});
+
+
+describe("C03 ADR-006 — transactional notification outbox", () => {
+  const failing: NotificationService = { async sendReservationConfirmation() { throw new Error("provider down"); } };
+  it("a BR-02 conflict rolls back the notification request together with the state change", async () => {
+    const first = await create(); await confirm(first.id).expect(200);
+    const second = await create(); await confirm(second.id).expect(409);
+    expect((await outbox()).map(row => row.reservationId)).toEqual([first.id]);
+  });
+  it("cancel, reject and pending approval never enqueue a notification", async () => {
+    await db.doctor.update({ where: { id: doctorId }, data: { requiresApproval: true } });
+    const a = await create(); await confirm(a.id).expect(200); await cancel(a.id).expect(200);
+    const b = await create(); await confirm(b.id).expect(200); await post(`/reservations/${b.id}/reject`, {}, "doctor").expect(200);
+    expect(await outbox()).toEqual([]);
+  });
+  it("exhausted retries mark FAILED and never change the reservation", async () => {
+    const draft = await create(); await confirm(draft.id).expect(200);
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      await dispatchPendingNotifications(db, failing, { now: () => instant, logger: quiet });
+      instant = new Date(instant.getTime() + 3_600_000);
+    }
+    expect(await outbox()).toMatchObject([{ status: "FAILED", attempts: 8, lastError: "provider down" }]);
+    await deliver(); expect(delivered).toHaveLength(0);
+    expect((await db.reservation.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("CONFIRMED");
+  });
+  it("concurrent dispatchers deliver each request once (FOR UPDATE SKIP LOCKED)", async () => {
+    const a = await create(); await confirm(a.id).expect(200);
+    await cancel(a.id).expect(200); // frees the slot for b; a's request stays pending
+    const b = await create(); await confirm(b.id).expect(200);
+    const slow: NotificationService = { async sendReservationConfirmation(message) {
+      await new Promise(resolve => setTimeout(resolve, 50)); delivered.push(message);
+    } };
+    await Promise.all([1, 2, 3].map(() => dispatchPendingNotifications(db, slow, { now: () => instant, logger: quiet })));
+    expect(delivered.map(m => m.reservationId).sort()).toEqual([a.id, b.id].sort());
+    expect((await outbox()).map(row => row.status)).toEqual(["SENT", "SENT"]);
+  });
+  it("a request survives a fresh process: a new dispatcher instance delivers it", async () => {
+    const draft = await create(); await confirm(draft.id).expect(200);
+    const fresh = new PrismaClient({ adapter: new PrismaPg({ connectionString: connectionString! }) });
+    try { await dispatchPendingNotifications(fresh, recorder, { now: () => instant, logger: quiet }); }
+    finally { await fresh.$disconnect(); }
+    expect(delivered.map(m => m.reservationId)).toEqual([draft.id]);
   });
 });

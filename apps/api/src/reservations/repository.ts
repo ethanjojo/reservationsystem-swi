@@ -9,7 +9,7 @@ export interface NewReservation {
   status: ReservationStatus;
 }
 
-/** Persistence only; createConfirmedReservation owns confirmation and business validation. */
+/** Persistence only; Reservation Service and Lifecycle own business validation. */
 export function createReservationRepository(db: Pick<PrismaClient, "reservation">) {
   return {
     async create(input: NewReservation): Promise<Reservation> {
