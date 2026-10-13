@@ -1,0 +1,89 @@
+
+> bookerdoc@0.1.0 test:unit
+> npm run test:unit -w @bookerdoc/api
+
+
+> @bookerdoc/api@0.1.0 test:unit
+> vitest run tests/lifecycle.test.ts tests/scheduling.test.ts tests/architecture.test.ts --reporter=verbose
+
+
+ RUN  v5.0.1 /Users/george/Desktop/reservationsystem-swi/apps/api
+
+ ✓ tests/architecture.test.ts > C03 architecture conformance > scans the real source tree 3ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > ADR-006: HTTP layer and reservation logic never call the notification provider 3ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > ADR-007: only reservations/lifecycle.ts decides Reservation status, without I/O 1ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > the checks detect violations (guards against a vacuous rule) 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: confirm cannot bypass ownership with schedule 3ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: cancel cannot bypass ownership with schedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: approve cannot bypass ownership with schedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: reject cannot bypass ownership with schedule 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from DRAFT 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from CONFIRMED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from CANCELLED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from REJECTED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from EXPIRED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from CONFIRMED 2ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-03: authorization takes precedence over expiry and missing internal deadline 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + confirm => needsSchedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + cancel => CANCELLED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + cancel => CANCELLED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + cancel => CANCELLED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + approve => needsSchedule 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + reject => REJECTED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + cancel => unchanged 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + cancel => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + cancel => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-05: confirmed cancellation accepts exactly 24h and rejects one millisecond less 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over confirm exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over cancel exactly at deadline 2ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over approve exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over reject exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: one millisecond before expiry permits approval; read policy agrees 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-07: draft starting at now %+d ms cannot be confirmed even with fits=true 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-07: draft starting at now %+d ms cannot be confirmed even with fits=true 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-08: only missing schedule needs data; a supplied invalid window is rejected 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-09: approval request persists a 24h deadline capped by appointment start 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-10: inputs remain unchanged and output metadata is not shared with inputs or another decision 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-11: missing pending deadline is an internal contract violation 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-05: draft cancellation stays possible after start; pending cancellation before deadline is unrestricted 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00Z, 30 minutes → true 3ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:30:00Z, 30 minutes → true 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:45:00Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T06:45:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-05T07:00:00Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:01:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00.001Z, 30 minutes → false 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-07-01T06:00:00Z, 30 minutes → true 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > does not join windows across a lunch break 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > anchors the grid to the window start 3ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > allows an interval ending exactly at local midnight 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > cannot borrow the next day's window 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > uses elapsed duration across the spring DST jump 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > distinguishes both occurrences of the fall repeated hour 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects a fall interval whose middle leaves the working window 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration -1 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0.5 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 1441 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration NaN 0ms
+
+ Test Files  3 passed (3)
+      Tests  72 passed (72)
+   Start at  12:52:02
+   Duration  556ms (transform 70%, import 19%, tests 7%, worker 5%)
+

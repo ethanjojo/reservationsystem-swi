@@ -1,0 +1,186 @@
+
+> bookerdoc@0.1.0 test
+> npm run db:generate && node scripts/test-db.mjs
+
+
+> bookerdoc@0.1.0 db:generate
+> npm run db:generate -w @bookerdoc/api
+
+
+> @bookerdoc/api@0.1.0 db:generate
+> prisma generate
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+
+✔ Generated Prisma Client (7.10.0) to ./src/generated/prisma in 145ms
+
+
+> @bookerdoc/api@0.1.0 db:migrate
+> prisma migrate deploy
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "bookerdoc_test", schema "public" at "localhost:55433"
+
+5 migrations found in prisma/migrations
+
+Applying migration `20261006111636_notification_outbox`
+
+┌─────────────────────────────────────────────────────────┐
+│  Update available 7.10.0 -> 8.0.0-rc.22                 │
+│                                                         │
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
+│                                                         │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261006111636_notification_outbox/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+
+> @bookerdoc/api@0.1.0 test:integration
+> vitest run --reporter=verbose
+
+
+ RUN  v5.0.1 /Users/george/Desktop/reservationsystem-swi/apps/api
+
+ ✓ tests/architecture.test.ts > C03 architecture conformance > scans the real source tree 4ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > ADR-006: HTTP layer and reservation logic never call the notification provider 4ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > ADR-007: only reservations/lifecycle.ts decides Reservation status, without I/O 3ms
+ ✓ tests/architecture.test.ts > C03 architecture conformance > the checks detect violations (guards against a vacuous rule) 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00Z, 30 minutes → true 3ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:30:00Z, 30 minutes → true 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T14:45:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T06:45:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-05T07:00:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:01:00Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-02-04T07:00:00.001Z, 30 minutes → false 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > 2030-07-01T06:00:00Z, 30 minutes → true 3ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > does not join windows across a lunch break 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > anchors the grid to the window start 4ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > allows an interval ending exactly at local midnight 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > cannot borrow the next day's window 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > uses elapsed duration across the spring DST jump 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > distinguishes both occurrences of the fall repeated hour 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects a fall interval whose middle leaves the working window 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0 1ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration -1 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 0.5 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration 1441 0ms
+ ✓ tests/scheduling.test.ts > Europe/Prague working windows > rejects invalid duration NaN 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: confirm cannot bypass ownership with schedule 3ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: cancel cannot bypass ownership with schedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: approve cannot bypass ownership with schedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-01: reject cannot bypass ownership with schedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from DRAFT 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from CONFIRMED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate approve from CANCELLED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from REJECTED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from EXPIRED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-02: supplied schedule cannot allocate confirm from CONFIRMED 3ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-03: authorization takes precedence over expiry and missing internal deadline 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + confirm => needsSchedule 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + cancel => CANCELLED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: DRAFT + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + cancel => CANCELLED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CONFIRMED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + cancel => CANCELLED 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + approve => needsSchedule 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: PENDING_APPROVAL + reject => REJECTED 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + confirm => invalid 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + cancel => unchanged 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: CANCELLED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + cancel => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: REJECTED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + confirm => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + cancel => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + approve => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-04: EXPIRED + reject => invalid 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-05: confirmed cancellation accepts exactly 24h and rejects one millisecond less 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over confirm exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over cancel exactly at deadline 2ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over approve exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: expiry takes precedence over reject exactly at deadline 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-06: one millisecond before expiry permits approval; read policy agrees 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-07: draft starting at now %+d ms cannot be confirmed even with fits=true 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-07: draft starting at now %+d ms cannot be confirmed even with fits=true 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-08: only missing schedule needs data; a supplied invalid window is rejected 0ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-09: approval request persists a 24h deadline capped by appointment start 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-10: inputs remain unchanged and output metadata is not shared with inputs or another decision 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-11: missing pending deadline is an internal contract violation 1ms
+ ✓ tests/lifecycle.test.ts > C05 LifecyclePolicy contract > C05-05: draft cancellation stays possible after start; pending cancellation before deadline is unrestricted 0ms
+ ✓ tests/reservation.integration.test.ts > Reservation persistence against real PostgreSQL > persists identity, relationships, precise times and status across client connections 635ms
+ ✓ tests/reservation.integration.test.ts > Reservation persistence against real PostgreSQL > enforces reservation CHECK and EXCLUDE constraints directly in PostgreSQL 239ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: creates a persistent DRAFT without allocation or notification 837ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"patientId":"bad"} leaves no row 78ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:00:00"} leaves no row 59ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-30T09:00:00Z"} leaves no row 44ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2029-02-04T09:00:00Z"} leaves no row 48ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:00:00.0009+01:00"} leaves no row 48ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T09:01:00+01:00"} leaves no row 45ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-04T15:45:00+01:00"} leaves no row 34ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"startsAt":"2030-02-05T09:00:00+01:00"} leaves no row 43ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-01: invalid create {"status":"CONFIRMED"} leaves no row 32ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > rejects missing identity and acting for another patient 27ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > returns 404 for an unknown resource 27ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-02: availability is read-only and uses half-open intervals 100ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-03: create ignores overlap, confirm rejects it and preserves DRAFT 100ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-04: concurrent conflicting confirms allocate at most once 68ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > same-reservation confirm race sends only one notification 48ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > confirms stored duration even after the service duration changes 37ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > revalidates future time and current windows at confirmation 30ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-05: cancellation at exactly 24h releases the interval, is retained and idempotent 54ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > REQ-05: less than 24h rejects cancellation with unchanged CONFIRMED 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > DRAFT can be cancelled even after its start, never physically deleted 33ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > cancel/confirm race has a serializable business outcome 43ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > owner patient and doctor can read reservation with contract fields 36ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > other patients cannot read, confirm or cancel a reservation 37ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.1 — actual HTTP and PostgreSQL > records the notification request with CONFIRMED; provider failure preserves success and is retried 64ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-07: persists a nonblocking request with a 24h deadline and no confirmation email 51ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-08: only the owning doctor can approve, exactly once 82ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-09: concurrent conflicting approvals confirm one and preserve the other request 77ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-10: rejection is persistent and terminal without allocation or notification 63ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: deadline is exact and survives a fresh app instance 66ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: approve commits expiry despite returning 409 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: reject commits expiry despite returning 409 38ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: cancel commits expiry despite returning 409 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: confirm commits expiry despite returning 409 64ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > caps waiting at the appointment and forbids approving at its start 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > allows pending cancellation less than 24h before start 39ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > approval/cancel and approval/reject races have legal serial outcomes 69ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > rechecks windows while preserving the original duration at approval 52ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > unauthorized access cannot materialize expiry 32ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > REQ-11: approval samples time after waiting for the reservation lock 51ms
+ ✓ tests/reservation-http.integration.test.ts > C02 baseline v0.2 — approval, rejection and expiry > changing the source flag does not bypass approval for an existing request 37ms
+ ✓ tests/reservation-http.integration.test.ts > C03 ADR-006 — transactional notification outbox > a BR-02 conflict rolls back the notification request together with the state change 45ms
+ ✓ tests/reservation-http.integration.test.ts > C03 ADR-006 — transactional notification outbox > cancel, reject and pending approval never enqueue a notification 47ms
+ ✓ tests/reservation-http.integration.test.ts > C03 ADR-006 — transactional notification outbox > exhausted retries mark FAILED and never change the reservation 42ms
+ ✓ tests/reservation-http.integration.test.ts > C03 ADR-006 — transactional notification outbox > concurrent dispatchers deliver each request once (FOR UPDATE SKIP LOCKED) 154ms
+ ✓ tests/reservation-http.integration.test.ts > C03 ADR-006 — transactional notification outbox > a request survives a fresh process: a new dispatcher instance delivers it 56ms
+
+ Test Files  5 passed (5)
+      Tests  120 passed (120)
+   Start at  12:52:44
+   Duration  4.28s (tests 70%, transform 17%, import 12%, worker 1%)
+
+npm notice
+npm notice New major version of npm available! 11.17.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

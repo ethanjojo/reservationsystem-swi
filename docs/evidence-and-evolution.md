@@ -232,3 +232,54 @@ v0.2 se shodným výstupem jako C02 a jedním `SENT` požadavkem v outboxu — [
 - `ReservationError` nese HTTP status i v doménovém Lifecycle; expirace zůstává on-access (bez časovače); identita je stále demo.
 
 **Commit/tag:** implementace `1e11105`, evidence a tag `c03-architecture` na větvi `codex/c03-architecture`.
+
+## C05 DD Verification Evidence
+
+### Návrh před implementací
+
+Selected architecture unit: **Reservation Lifecycle**, mutace existující rezervace podle ADR-007 a C02 v0.2. [C05 Detailed Design](architecture-and-decisions.md#c05-detailed-design) byl schválen zadavatelem a uložen jako commit `d8396a3` před odvozenými testy (`d1bf1bd`) a implementací (`3967202`). Tento sled dokládá návrhový záměr před kódem; není to zpětně nakreslená struktura.
+
+### Tests derived from DD
+
+Testovací tabulka a zdůvodnění dvou úrovní jsou součástí DD. [lifecycle.test.ts](../apps/api/tests/lifecycle.test.ts) obsahuje případy s ID C05-01 až C05-11: role/vlastnictví i při dodaném schedule, zákaz neplatného stavu, pořadí chyb, 24 kombinací stavu a operace, přesné časové hranice, dva průchody jednou policy, obě varianty potvrzení, cap deadline a nesdílená Date metadata. Celkem **48 unit případů vybrané jednotky**, nikoli počet nových testů navíc k původní sadě — C03 soubor se 6 testy byl nahrazen podrobnějšími případy odvozenými z DD.
+
+DD-08 je ověřeno integračními [HTTP/PostgreSQL testy](../apps/api/tests/reservation-http.integration.test.ts): čas se bere po skutečném řádkovém zámku, expirace se ukládá i při 409 a kolize rollbackne stav i outbox požadavek. Tyto vlastnosti by mock DB neprokázal. Unit rozhodnutí samo neprokazuje výlučnost zdroje.
+
+### Unit/component tests executed
+
+Dne 13. 10. 2026, Node 24.19.0, npm 11.17.0, lokální PostgreSQL 17.9 na oddělené `bookerdoc_test`:
+
+| Příkaz / fáze | Skutečný výsledek | Evidence |
+| --- | --- | --- |
+| První RED: `npm run test:integration -w @bookerdoc/api -- tests/lifecycle.test.ts` před implementací | 48 failed: nový export `reservationLifecycle` ještě neexistoval. To prokazuje chybějící nový kontrakt, nikoli 48 funkčních regresí starého HTTP API. | Tests commit `d1bf1bd`; implementace vznikla až později. |
+| `npm run test:unit` po implementaci | **72 passed**: 48 Lifecycle, 20 Scheduling, 4 architecture checks; bez PostgreSQL a bez síťového připojení | [Unit výstup](evidence/c05-unit-tests.txt) |
+| `npm test` | **120 passed**, 5 souborů, exit 0; včetně stávající HTTP/DB a outbox sady | [Celý výstup](evidence/c05-tests.txt) |
+| `npm run typecheck` | API i web prošly | ověřeno před implementation commitem |
+| `npm run build` | API i Vite web prošly | ověřeno před implementation commitem |
+
+Nový kořenový příkaz `npm run test:unit` dovoluje ověřit DD bez spuštění databáze. Plné CI dál běží přes `npm test` a zahrnuje stejnou unit sadu i skutečnou persistence.
+
+### Design ↔ implementation mismatch a resolution
+
+| DD decision | Implemented? | Evidence | Action |
+| --- | --- | --- | --- |
+| DD-01 Jeden úplný kontrakt mutace s aktérem ve vstupu | YES | [LifecyclePolicy a TransitionCommand](../apps/api/src/reservations/lifecycle.ts), [Service](../apps/api/src/reservations/reservation-service.ts), C05-01 | keep |
+| DD-02 Validní snapshot a povinný pending deadline | YES | `isExpired`, C05-03/11; datum je vstupní precondition, ne nová validace HTTP | keep, zachovat popsanou hranici |
+| DD-03 Nové výsledky a kopie Date | YES | `expireIfDue` vrací nový objekt; pending metadata mají nové Date; C05-10 | keep |
+| DD-04 Ani dodané schedule neobchází kontrolu přechodu | YES | privátní `evaluate` vždy autorizuje, kontroluje expiry, stav a čas; C05-01/02/08 | keep; staré veřejné `decide`/`allocate` odstraněny |
+| DD-05 Jednoznačné pořadí chyb a approval větev | YES | evaluator; C05-03/06/09 | keep |
+| DD-06 Stavová tabulka | YES | parametrizovaných 24 kombinací C05-04 | keep |
+| DD-07 Inkluzivní 24h, striktní deadline/start | YES | C05-05/06/07, PostgreSQL expiry za zámkem | keep |
+| DD-08 Stejný snapshot/čas pro dva průchody; atomicita v Service | YES | Service vytvoří `command` jednou a podruhé přidá schedule; konečný Decision aplikuje v téže transakci; outbox integrační testy | keep |
+
+Původní C03 spolupráce měla veřejné `allocate` s předpokladem, že klient nejprve správně zavolal `authorize` a `decide`. C05 záměr to změnil na úplný kontrakt, proto jsme upravili kód a klienta. Diagram jsme neupravovali zpětně tak, aby zachoval tuto mezeru. Ve výsledku není nevyřešený planned DD ↔ actual implementation rozdíl; class diagram označuje modulové role, implementace nepotřebuje nové runtime třídy.
+
+Business pravidla HTTP v0.2 zůstávají zachovaná. Future-start guard je nyní také uvnitř Lifecycle, takže ani přímý klient s `fits=true` nemůže navrhnout minulou alokaci. API není nově oprávněno přijímat pracovní fakta od uživatele.
+
+### Remaining design risk
+
+Schedule je důvěryhodný snapshot z interní služby; Lifecycle nemůže sama potvrdit jeho aktuálnost. Service musí držet zámek a použít stejný čas mezi průchody. Budoucí souběžná editace pracovních oken může vyžadovat další konzistenční pravidlo. Readonly typy neověřují runtime validitu Date, která je explicitní precondition; požadavky HTTP a data z DB ji v současné cestě zajišťují. Kolizní ochrana a atomický outbox zůstávají v DB transakci. `ReservationError` stále nese HTTP status jako známý kompromis C03.
+
+### Commit/tag
+
+Návrh `d8396a3` → tests `d1bf1bd` → implementation `3967202` → tato evidence. Reprodukovatelný výsledný snapshot: tag **`c05-detailed-design`**. Tag označuje ověřený slice, nenahrazuje skutečné týmové review PR před merge.

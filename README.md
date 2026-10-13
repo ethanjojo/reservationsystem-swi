@@ -6,6 +6,8 @@ Rezervace termínů u lékařů. Tým: **Jan Horák** ([ethanjojo](https://githu
 
 ## Specifikace a schválení
 
+- [C05 Detailed Design Lifecycle](docs/architecture-and-decisions.md#c05-detailed-design) a [ověření návrhu](docs/evidence-and-evolution.md#c05-dd-verification-evidence).
+
 - [Aktuální baseline v0.2, pravidla, požadavky a diagramy](docs/c02/v02.md).
 - [Analýza dopadu před změnou](docs/c02/v02-impact.md) a [historická baseline v0.1](docs/c02/v01.md).
 - [Evidence C01/C02](docs/evidence-and-evolution.md).
@@ -64,6 +66,7 @@ Seed nastaví demo lékaři `requiresApproval=true`; noví lékaři mají defaul
 Vybere volné pondělí alespoň 48 hodin dopředu, předvede Create/Availability/Confirm/Cancel,
 schválení lékařem, odmítnutí, zákaz schválení pacientem a kolizi. Vytvořené řádky zachová jako CANCELLED/REJECTED. Testy navíc ověřují přesnou hranici 24h,
 souběh, oprávnění a časové přechody bez čekání reálných hodin. `npm test` spouští skutečné HTTP/DB testy s řízenými hodinami.
+`npm run test:unit` ověří Lifecycle, Scheduling a architektonické hranice bez běžící databáze.
 
 ## HTTP kontrakt v0.2
 
