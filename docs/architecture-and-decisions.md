@@ -254,3 +254,199 @@ protože pracovní okna jsou I/O; autoritativní kontrola kolize zůstává v DB
 
 **Rozhodnutí znovu otevřeme, když:** přechody začnou vyžadovat data, která nejde předat jako vstup (např. kapacitní
 Resource), nebo vznikne druhý zapisovatel stavu mimo Reservation Service (job, jiná služba).
+
+## C05 Detailed Design
+
+Návrhový záměr schválen zadavatelem 13. 10. 2026. Tento návrh se ukládá **před implementací**; vychází z C03 ADR-007 a z [C02 v0.2](c02/v02.md). C03 popis a jeho názvy `authorize`/`decide`/`allocate` zůstávají historickým podkladem.
+
+### Selected architecture unit
+
+**Reservation Lifecycle**, konkrétně rozhodnutí o mutaci existující rezervace. Scénáře OP-03 Confirm, OP-04 Cancel, OP-05 Approve, OP-06 Reject. Požadavky REQ-03/05/06/07/08/11; pravidla BR-03/04/05/06/07/08. BR-02 (nepřekryv) nadále vynucuje PostgreSQL, samotné doménové rozhodnutí kapacitu negarantuje.
+
+C03 už jednotku izoloval od I/O, ale klient musí správně složit tři veřejné funkce. Samostatné `allocate` může vytvořit alokaci i bez ověření aktéra, stavu a deadline. **DD-01:** jeden veřejný kontrakt `LifecyclePolicy.evaluate(command)` musí všechny podmínky přechodu znovu ověřit i tehdy, když klient rovnou předá pracovní podmínky. Staré mutační funkce přestanou být veřejným API.
+
+### Detailed responsibilities
+
+| Responsibility | Proč je potřeba? |
+| --- | --- |
+| Určit oprávnění aktéra ke konkrétní operaci a řádku | ID rezervace ani dostupnost neudělují právo ji změnit (BR-05). |
+| Vyhodnotit deadline až po autorizaci | Vypršení je rozhodné od přesné hranice, ale cizí aktér nesmí vyvolat změnu (BR-08). |
+| Rozhodnout povolený zdrojový stav a idempotenci | Terminální stav nesmí být oživen; opakované Cancel má úspěch beze změny. |
+| Uplatnit časové podmínky zrušení a alokace | Hranice 24h je inkluzivní, potvrzovaný začátek musí být budoucí. |
+| Vyžádat pracovní podmínky a posoudit výsledek | Čistá jednotka nečte DB; první průchod je požadavek na data, nikoli povolení zápisu. |
+| Vypočítat úplný návrh změny včetně approval deadline | Volající nesmí domýšlet cílový stav ani délku čekání. |
+| Vrátit rozhodnutí bez mutace vstupu a bez I/O | Rozhodnutí lze izolovaně testovat; trvalý zápis vlastní Service. |
+
+### Design elements and ownership
+
+| Responsibility | Owner | State/data | Why here? |
+| --- | --- | --- | --- |
+| Oprávnění, expiry, stavová a časová pravidla | `LifecycleEvaluator` v `lifecycle.ts` | `TransitionCommand`: actor, operation, readonly row, time | Jeden vlastník BR; aktér je vždy součást vstupu, kontrolu nelze přeskočit. |
+| Výpočet pending/confirmed/cancelled/rejected/expired | tentýž evaluator za `LifecyclePolicy` | `Decision` a `StateChange` | Žádná cílová status hodnota se nevymýšlí ve službě (ADR-007). |
+| Fakta o pracovním okně | stávající Scheduling & Availability | `Schedule`: fits, requiresApproval | Algoritmus oken a jeho DB dotazy zůstávají za hranicí Lifecycle. |
+| Načtení aktuálního stavu, serverový čas, zápis a outbox | stávající Reservation Service | zamčený DB řádek; stejný time pro oba průchody | Čistá policy nemůže zajistit serializaci ani atomicitu. |
+| Chyby přechodu | `ReservationError` | code a status | Zachován C03 kompromis HTTP status v doménové chybě. |
+
+### Key interface / contract
+
+```typescript
+interface LifecyclePolicy {
+  evaluate(command: TransitionCommand): Decision;
+}
+type TransitionCommand = {
+  readonly row: LifecycleView;
+  readonly actor: Actor;
+  readonly operation: Operation; // confirm | cancel | approve | reject
+  readonly time: Date;
+  readonly schedule?: Schedule;
+};
+// Decision: unchanged | expire(change) | change(change) | needsSchedule
+```
+
+**DD-02, preconditions:** row je existující snapshot se známým stavem a validními Date hodnotami; `time` je autoritativní serverový čas. PENDING_APPROVAL má uložený platný deadline. Chybějící deadline je porušení interního datového kontraktu, nikoli normální INVALID_STATE. Aktéra určila důvěryhodná Identity. Pokud je dodán schedule, jsou to aktuální fakta pro tento řádek. Policy nemůže rozpoznat lež či zastaralá fakta o pracovním okně.
+
+**Postconditions:** `unchanged` nevyžaduje zápis; `change` je jediný přípustný návrh změny; `expire` požaduje uložit EXPIRED před odpovědí 409. `needsSchedule` není alokace a nesmí se persistovat. Policy nemění vstup, volaný čas ani data a neposílá notifikaci. **DD-03:** nový StateChange i jeho Date metadata nejsou sdílené se vstupem či předchozím výsledkem.
+
+**Failures:** FORBIDDEN 403 má přednost před expiry a stavovou chybou; INVALID_STATE 409 pro nepovolený přechod; CANCELLATION_TOO_LATE 409 pro potvrzenou rezervaci pod 24h; START_MUST_BE_FUTURE 400 pro Confirm/Approve bez budoucího startu; OUTSIDE_WORKING_WINDOW 400 pro schedule.fits=false. `expire` je výsledek, ne výjimka: až Service po jeho commitu vytváří APPROVAL_EXPIRED 409.
+
+### Focused structural view
+
+Názvy Evaluator/Service označují modulové role, nikoli požadavek přidávat třídy. `reservationLifecycle` je exportovaná implementace rozhraní; vlastní `evaluate` je privátní funkce modulu.
+
+```mermaid
+classDiagram
+  class LifecyclePolicy {
+    <<interface>>
+    +evaluate(command) Decision
+  }
+  class LifecycleEvaluator {
+    +evaluate(command) Decision
+  }
+  class TransitionCommand {
+    +actor : Actor
+    +operation : Operation
+    +time : Date
+    +schedule : Schedule optional
+  }
+  class LifecycleView {
+    +status : ReservationStatus
+    +patientId : string
+    +doctorId : string
+    +startsAt : Date
+    +approvalExpiresAt : Date optional
+  }
+  class Schedule {
+    +fits : boolean
+    +requiresApproval : boolean
+  }
+  class Decision {
+    +kind : unchanged or expire or change or needsSchedule
+    +change : StateChange optional
+  }
+  class ReservationService {
+    +changeReservation(id, actor, operation, now)
+  }
+  class ReservationError {
+    +status : number
+    +code : string
+  }
+  LifecycleEvaluator ..|> LifecyclePolicy
+  ReservationService ..> LifecyclePolicy : evaluate
+  LifecyclePolicy ..> TransitionCommand : input
+  TransitionCommand --> LifecycleView : readonly snapshot
+  TransitionCommand --> Schedule : supplied facts
+  LifecyclePolicy ..> Decision : returns
+  LifecycleEvaluator ..> ReservationError : rejects
+```
+
+### Important methods / operations
+
+**evaluate(command)** — zodpovědnost: úplně posoudit jednu mutaci. Vstup/výstup/kontrakt výše. Preconditions platí i při druhém volání se schedule. Postcondition: žádné návrhy CONFIRMED z DRAFT+approve, z terminálního stavu, po expiry ani pro cizího aktéra. Side effects: žádné. Pokud chybí schedule pro oprávněné Confirm/Approve, vrací needsSchedule; při druhém průchodu zopakuje všechny guards. **DD-04:** žádný veřejný nehlídaný druhý krok `allocate`.
+
+**expireIfDue(row,time)** — ponechaná read policy: pro autorizované čtení vrátí nový EXPIRED návrh právě při now >= deadline, jinak null. Vstup musí odpovídat DD-02; sama read oprávnění neřeší, Service před ní volá `canRead`. Nemutuje data; nemá I/O. Command evaluate používá stejnou definici expiry.
+
+`authorizeCreate`, `canRead`, `INITIAL_STATE`, `BLOCKING_STATUS` a `isAllocation` zůstávají sdílené hranice C03 pro Create/Read/Availability/outbox. Tento slice mění kontrakt mutací existujícího řádku.
+
+### Algorithm / decision logic
+
+**DD-05, pořadí rozhodnutí:**
+
+```text
+ověř role a vlastnictví operace; jinak FORBIDDEN
+pokud čekání vypršelo: vrať expire(EXPIRED)
+pokud cancel:
+  CANCELLED -> unchanged
+  REJECTED/EXPIRED -> INVALID_STATE
+  CONFIRMED s start-now < 24h -> CANCELLATION_TOO_LATE
+  jinak -> change(CANCELLED)
+pokud confirm vyžaduj DRAFT; approve/reject vyžaduj PENDING_APPROVAL
+jiný zdrojový stav -> INVALID_STATE
+reject -> change(REJECTED)
+start <= now -> START_MUST_BE_FUTURE
+bez schedule -> needsSchedule
+schedule.fits=false -> OUTSIDE_WORKING_WINDOW
+confirm + requiresApproval -> change(PENDING_APPROVAL,
+    requestedAt=kopie now, expiresAt=min(now+24h,start))
+jinak -> change(CONFIRMED)
+```
+
+**DD-06, stavová rozhodovací tabulka** (vlastní aktér, daleko před termínem, platné čekání, bez schedule):
+
+| Zdrojový stav | Confirm | Cancel | Approve | Reject |
+| --- | --- | --- | --- | --- |
+| DRAFT | needsSchedule | CANCELLED | INVALID_STATE | INVALID_STATE |
+| CONFIRMED | INVALID_STATE | CANCELLED | INVALID_STATE | INVALID_STATE |
+| PENDING_APPROVAL | INVALID_STATE | CANCELLED | needsSchedule | REJECTED |
+| CANCELLED | INVALID_STATE | unchanged | INVALID_STATE | INVALID_STATE |
+| REJECTED | INVALID_STATE | INVALID_STATE | INVALID_STATE | INVALID_STATE |
+| EXPIRED | INVALID_STATE | INVALID_STATE | INVALID_STATE | INVALID_STATE |
+
+Expiry má před touto tabulkou přednost pro oprávněné commandy; false `requiresApproval` nezmění již čekající žádost. **DD-07:** Cancel potvrzené přesně 24h ano, o 1ms později ne; pending expiry přesně na deadline; budoucnost startu je striktní.
+
+### Detailed sequence
+
+```mermaid
+sequenceDiagram
+  participant S as Reservation Service
+  participant DB as PostgreSQL
+  participant L as LifecyclePolicy / Evaluator
+  participant A as Scheduling Availability
+  S->>DB: begin, lock row, load snapshot
+  S->>S: time = now() po zámku
+  S->>L: evaluate(row, actor, approve, time)
+  L->>L: role+doctorId, expiry, source state, future start
+  L-->>S: needsSchedule
+  S->>A: scheduleInterval(tx, stored interval, time)
+  A-->>S: fits + requiresApproval
+  S->>L: evaluate(stejný row, actor, approve, time, schedule)
+  L->>L: zopakuj guards, ověř fits, urči cílový stav
+  L-->>S: change(CONFIRMED)
+  S->>DB: update(change) + enqueueConfirmation ve stejné tx
+  DB-->>S: commit nebo rollback při konfliktu
+```
+
+**DD-08, spolupráce:** Service aplikuje pouze konečné Decision, podruhé předá stejný row/actor/operation/time. Samostatné needsSchedule nikdy nevede k zápisu. PostgreSQL řeší kolize a Service s Outboxem atomicky ukládá požadavek na notifikaci. Tyto záruky nejsou výsledkem samotného unit testu Lifecycle.
+
+### Tests derived from DD
+
+| DD element / decision | Co musí platit? | Level | Test case |
+| --- | --- | --- | --- |
+| DD-01/04 veřejný kontrakt | schedule nedovoluje obejít roli ani zdrojový stav | unit | C05-01 cizí aktér + validní schedule odmítnut; C05-02 DRAFT+approve a terminální+confirm odmítnuty |
+| DD-05 pořadí | cizí aktér nedostane expiry rozhodnutí ani po deadline | unit | C05-03 FORBIDDEN před expiry; chybějící interní deadline neodhalit cizímu |
+| DD-06 state table | všechny 24 kombinace dávají definovaný výsledek | unit | C05-04 explicitní tabulka zdrojového stavu × operace |
+| DD-07 časové hranice | 24h inkluzivně, deadline/start striktně | unit | C05-05 přesně 24h a minus1ms; C05-06 deadline minus1ms/exact; C05-07 start exact/past |
+| DD-04 schedule collaboration | první průchod needsSchedule, druhý konečná změna | unit | C05-08 noSchedule + current facts, false fits odmítnuto |
+| DD-05 approval branch | běžný zdroj CONFIRMED, approval zdroj min(24h,start), approve ignoruje změněný flag | unit | C05-09 obě varianty a cap |
+| DD-03 vlastnictví dat | výsledek ani jeho Date nemění vstup a jiné volání | unit | C05-10 frozen input, mutace vrácených metadat nezasáhne vstup |
+| DD-02 interní kontrakt | pending bez deadline selže jednoznačně, bez návrhu zápisu | unit | C05-11 chybějící deadline |
+| DD-08 spolupráce a persistence | stejný čas po zámku, konfliktní potvrzení rollback, atomický outbox | integration | existující PostgreSQL/HTTP testy souběhu, expiry za zámkem a outbox atomicity |
+
+**Vybraný level C05-01:** unit, protože rozhodnutí o roli patří čisté jednotce a musí být správné i bez HTTP vrstvy a bez DB. Ověřuje, že předání schedule neobchází DD-01/04.
+
+**Vybraný level DD-08:** integration se skutečným PostgreSQL, protože mock nemůže prokázat exclusion constraint, row lock ani společný commit stavu a outboxu. Ověřuje spolupráci navrženou v DD-08, nikoli samotnou tabulku přechodů.
+
+### DD decisions intentionally left to code
+
+Názvy privátních helperů, lokální syntax a uspořádání podmínek bez vlivu na definované pořadí chyb. Nepřidáváme class hierarchy ani repository abstrakci. Validace ISO, výpočet pracovních oken a konfigurace dispatcheru patří stávajícím vlastníkům C03.
+
+Remaining design risks: fakta schedule jsou důvěryhodná a Service musí držet row lock a stejný čas mezi průchody; souběžná editace pracovních oken není v dnešním API. Výlučnost a atomicitu stále řeší DB/Service. TypeScript readonly není hluboká runtime neměnnost Date, proto evaluator vrací samostatné Date. HTTP status v ReservationError zůstává vědomý C03 kompromis.
