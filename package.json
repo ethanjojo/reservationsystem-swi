@@ -20,7 +20,8 @@
     "db:migrate": "npm run db:migrate -w @bookerdoc/api",
     "test": "npm run db:generate && node scripts/test-db.mjs",
     "db:seed": "npm run db:generate && npm run db:seed -w @bookerdoc/api",
-    "demo:c02": "node --env-file=.env scripts/demo-c02.mjs"
+    "demo:c02": "node --env-file=.env scripts/demo-c02.mjs",
+    "test:unit": "npm run test:unit -w @bookerdoc/api"
   },
   "devDependencies": {
     "dotenv": "^17.0.0"
