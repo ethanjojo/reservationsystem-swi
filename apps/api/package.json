@@ -11,7 +11,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "test:integration": "vitest run --reporter=verbose",
-    "db:seed": "tsx --env-file=../../.env prisma/seed.ts"
+    "db:seed": "tsx --env-file=../../.env prisma/seed.ts",
+    "test:unit": "vitest run tests/lifecycle.test.ts tests/scheduling.test.ts tests/architecture.test.ts --reporter=verbose"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

@@ -3,7 +3,7 @@ import type { ReservationInput } from "./input.js";
 import type { Actor } from "../actors.js";
 import { ReservationError } from "./errors.js";
 import { scheduleInterval } from "./availability.js";
-import { INITIAL_STATE, allocate, authorize, authorizeCreate, canRead, decide, expireIfDue, isAllocation,
+import { INITIAL_STATE, reservationLifecycle, authorizeCreate, canRead, expireIfDue, isAllocation,
   type Operation } from "./lifecycle.js";
 import { enqueueConfirmation } from "../notifications/outbox.js";
 
@@ -40,23 +40,26 @@ export async function changeReservation(db: PrismaClient, id: string, actor: Act
   try {
     const result = await db.$transaction(async tx => {
       const row = await lockedReservation(tx, id);
-      authorize(actor, row, operation);
       const time = now(); // authoritative time sampled after acquiring the state lock
-      const decision = decide(row, operation, time);
+      const command = { row, actor, operation, time };
+      let decision = reservationLifecycle.evaluate(command);
+      let schedule: Awaited<ReturnType<typeof scheduleInterval>> | undefined;
+      if (decision.kind === "needsSchedule") {
+        schedule = await scheduleInterval(tx, { ...row, startsAt: row.startsAt.toISOString() }, time, row.endsAt);
+        decision = reservationLifecycle.evaluate({ ...command,
+          schedule: { fits: schedule.fits, requiresApproval: schedule.doctor.requiresApproval } });
+      }
       if (decision.kind === "expire") {
         await tx.reservation.update({ where: { id }, data: decision.change });
         // Return a marker: throwing inside the transaction would undo expiration.
         return { expired: true as const };
       }
       if (decision.kind === "unchanged") return { reservation: row };
-      let change = decision.kind === "change" ? decision.change : undefined;
-      let schedule: Awaited<ReturnType<typeof scheduleInterval>> | undefined;
-      if (!change) {
-        schedule = await scheduleInterval(tx, { ...row, startsAt: row.startsAt.toISOString() }, time, row.endsAt);
-        change = allocate(row, operation, time, { fits: schedule.fits, requiresApproval: schedule.doctor.requiresApproval });
-      }
+      if (decision.kind === "needsSchedule") throw new Error("Lifecycle requires schedule despite supplied facts");
+      const change = decision.change;
       const reservation = await tx.reservation.update({ where: { id }, data: change });
-      if (isAllocation(change) && schedule) {
+      if (isAllocation(change)) {
+        if (!schedule) throw new Error("Allocation requires validated schedule");
         // ADR-006: the notification request commits atomically with CONFIRMED and rolls back with a BR-02 conflict.
         const patient = await tx.user.findUniqueOrThrow({ where: { id: row.patientId } });
         await enqueueConfirmation(tx, { reservationId: id, recipient: patient.email, doctorName: schedule.doctor.name,

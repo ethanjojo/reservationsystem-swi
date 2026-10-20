@@ -7,20 +7,30 @@ import { ReservationError } from "./errors.js";
  * Pure — no I/O. Reservation Service locks and loads, asks for a decision and applies the returned StateChange.
  */
 export type Operation = "confirm" | "cancel" | "approve" | "reject";
-export type LifecycleView = Pick<Reservation, "status" | "patientId" | "doctorId" | "startsAt" | "approvalExpiresAt">;
+export type LifecycleView = Readonly<Pick<Reservation, "status" | "patientId" | "doctorId" | "startsAt" | "approvalExpiresAt">>;
 export type StateChange = { status: ReservationStatus; approvalRequestedAt?: Date; approvalExpiresAt?: Date };
 export type Decision =
   | { kind: "expire"; change: StateChange } // BR-08: committed even though the caller receives 409
   | { kind: "unchanged" }
   | { kind: "change"; change: StateChange }
   | { kind: "needsSchedule" }; // confirm/approve depend on current working windows (BR-04)
-export type Schedule = { fits: boolean; requiresApproval: boolean };
+export type Schedule = Readonly<{ fits: boolean; requiresApproval: boolean }>;
+/** C05: schedule is a fact input, never authorization to skip the guards. */
+export interface TransitionCommand {
+  readonly row: LifecycleView;
+  readonly actor: Actor;
+  readonly operation: Operation;
+  readonly time: Date;
+  readonly schedule?: Schedule;
+}
+export interface LifecyclePolicy {
+  evaluate(command: TransitionCommand): Decision;
+}
 
 const DAY_MS = 86_400_000;
 export const INITIAL_STATE: StateChange = { status: "DRAFT" };
 /** BR-02: the only state that allocates the Resource. */
 export const BLOCKING_STATUS: ReservationStatus = "CONFIRMED";
-const EXPIRED: StateChange = { status: "EXPIRED" };
 
 // BR-05
 export function authorizeCreate(actor: Actor, patientId: string) {
@@ -29,7 +39,7 @@ export function authorizeCreate(actor: Actor, patientId: string) {
 export function canRead(actor: Actor, row: LifecycleView) {
   return (actor.role === "patient" && actor.id === row.patientId) || (actor.role === "doctor" && actor.id === row.doctorId);
 }
-export function authorize(actor: Actor, row: LifecycleView, operation: Operation) {
+function authorize(actor: Actor, row: LifecycleView, operation: Operation) {
   if (operation === "approve" || operation === "reject") {
     if (actor.role !== "doctor" || actor.id !== row.doctorId) throw new ReservationError(403, "FORBIDDEN");
   } else authorizeCreate(actor, row.patientId);
@@ -42,11 +52,14 @@ function isExpired(row: LifecycleView, time: Date) {
   return time.getTime() >= row.approvalExpiresAt.getTime();
 }
 export function expireIfDue(row: LifecycleView, time: Date): StateChange | null {
-  return isExpired(row, time) ? EXPIRED : null;
+  return isExpired(row, time) ? { status: "EXPIRED" } : null;
 }
 
-export function decide(row: LifecycleView, operation: Operation, time: Date): Decision {
-  if (isExpired(row, time)) return { kind: "expire", change: EXPIRED };
+/** Pure C05 evaluator: every entry, including a second pass, enforces the entire command contract. */
+function evaluate({ row, actor, operation, time, schedule }: TransitionCommand): Decision {
+  authorize(actor, row, operation);
+  const expiry = expireIfDue(row, time);
+  if (expiry) return { kind: "expire", change: expiry };
   if (operation === "cancel") {
     if (row.status === "CANCELLED") return { kind: "unchanged" };
     if (row.status === "REJECTED" || row.status === "EXPIRED") throw new ReservationError(409, "INVALID_STATE");
@@ -58,18 +71,17 @@ export function decide(row: LifecycleView, operation: Operation, time: Date): De
   const requiredState: ReservationStatus = operation === "confirm" ? "DRAFT" : "PENDING_APPROVAL";
   if (row.status !== requiredState) throw new ReservationError(409, "INVALID_STATE");
   if (operation === "reject") return { kind: "change", change: { status: "REJECTED" } };
-  return { kind: "needsSchedule" };
-}
-
-/** Second step of confirm/approve. BR-02 collisions are decided authoritatively by the database constraint. */
-export function allocate(row: LifecycleView, operation: Operation, time: Date, schedule: Schedule): StateChange {
+  if (row.startsAt.getTime() <= time.getTime()) throw new ReservationError(400, "START_MUST_BE_FUTURE");
+  if (!schedule) return { kind: "needsSchedule" };
   if (!schedule.fits) throw new ReservationError(400, "OUTSIDE_WORKING_WINDOW");
   if (operation === "confirm" && schedule.requiresApproval) {
-    return { status: "PENDING_APPROVAL", approvalRequestedAt: time,
-      approvalExpiresAt: new Date(Math.min(time.getTime() + DAY_MS, row.startsAt.getTime())) };
+    return { kind: "change", change: { status: "PENDING_APPROVAL", approvalRequestedAt: new Date(time.getTime()),
+      approvalExpiresAt: new Date(Math.min(time.getTime() + DAY_MS, row.startsAt.getTime())) } };
   }
-  return { status: BLOCKING_STATUS };
+  return { kind: "change", change: { status: BLOCKING_STATUS } };
 }
+
+export const reservationLifecycle: LifecyclePolicy = { evaluate };
 
 /** BR-07: only an allocation requests a confirmation notification. */
 export function isAllocation(change: StateChange) {
