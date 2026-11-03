@@ -91,6 +91,18 @@ describe("C02 baseline v0.1 — actual HTTP and PostgreSQL", () => {
     expect(await db.reservation.findUnique({ where: { id: second.id } })).toMatchObject({ status: "DRAFT" });
     expect(await deliver()).toHaveLength(1);
   });
+  it("C06 F1 / BR-01+BR-02: confirm allocates intervals adjacent on both sides, rejects a 15-minute overlap", async () => {
+    const draftAt = async (startsAt: string) => (await post("/reservations", { ...payload(), startsAt }).expect(201)).body;
+    const middle = await create(); await confirm(middle.id).expect(200);
+    for (const startsAt of ["2030-02-04T09:30:00+01:00", "2030-02-04T08:30:00+01:00"]) {
+      const neighbour = await draftAt(startsAt);
+      expect((await confirm(neighbour.id).expect(200)).body.status).toBe("CONFIRMED");
+    }
+    const overlapping = await draftAt("2030-02-04T09:15:00+01:00");
+    expect((await confirm(overlapping.id).expect(409)).body.error.code).toBe("RESERVATION_CONFLICT");
+    expect(await db.reservation.count({ where: { patientId, status: "CONFIRMED" } })).toBe(3);
+    expect(await deliver()).toHaveLength(3);
+  });
   it("REQ-04: concurrent conflicting confirms allocate at most once", async () => {
     const a = await create(), b = await create();
     const responses = await Promise.all([confirm(a.id), confirm(b.id)]);
