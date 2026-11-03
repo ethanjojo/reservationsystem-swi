@@ -91,6 +91,14 @@ describe("Reservation persistence against real PostgreSQL", () => {
         endsAt: new Date("2030-02-04T09:45:00Z"),
         status: "CONFIRMED",
       })).rejects.toThrow(/reservation_no_overlap/);
+
+      // C06 F1 / BR-01: half-open [start,end) — touching intervals on both sides are not a conflict.
+      for (const [startsAt, endsAt] of [["2030-02-04T09:30:00Z", "2030-02-04T10:00:00Z"], ["2030-02-04T08:30:00Z", "2030-02-04T09:00:00Z"]] as const) {
+        await createReservationRepository(db).create({
+          patientId, doctorId, serviceId, startsAt: new Date(startsAt), endsAt: new Date(endsAt), status: "CONFIRMED",
+        });
+      }
+      expect(await db.reservation.count({ where: { doctorId, status: "CONFIRMED" } })).toBe(3);
     } finally {
       try {
         await db.$transaction([
