@@ -1,7 +1,8 @@
 # C08 — Technical Design Review (část A, CP1)
 
 **Tým:** BookerDoc (Jan Horák, Štěpán Rychlý, Daniel Krásný).
-**Reporting baseline:** tag `c08-reporting-baseline` (větev `codex/c07-c08-cp1-review`; opravy C06 v `77f235d` a `2c0c5b4`).
+**Reporting baseline:** tag `c08-reporting-baseline` (větev `codex/c07-c08-cp1-review`,
+[PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12); opravy C06 v `77f235d` a `2c0c5b4`).
 **C06 assessed baseline:** `1b3c1fb` = tag `c05-detailed-design`. Stejný tag a stejné nálezy uvádí i status report
 ([PPTX](C08_Project_Status_BookerDoc.pptx)).
 
@@ -13,7 +14,7 @@ Forma: 8–10 min nad otevřeným repozitářem a běžícími testy, bez novéh
 > projde, překryv a souběh ne → **C06 F1**: tato hranice neměla důkaz, doplnili jsme ho a ověřili mutací.
 
 Rozdělení řečníků (opatření k riziku R-02, každý spouští svou evidenci živě): kroky 1–2 Jan Horák, krok 3 Daniel
-Krásný, kroky 4–5 Štěpán Rychlý. Rozdělení je návrh a potvrdí ho zkouška do 9. 11. 2026.
+Krásný, kroky 4–5 Štěpán Rychlý. Rozdělení je návrh a tým ho potvrdí před obhajobou.
 
 ---
 
@@ -94,8 +95,8 @@ Nejdůležitější nález je **F1**, protože se týká hlavního invariantu BR
    ([c07-c06-findings-verification.txt](../evidence/c07-c06-findings-verification.txt)).
 5. **Ostatní:** F3 (pořadí chyb DD-05, oba mutanti nyní zabiti testem C05-12) a F2 (zastaralé C03 pohledy, opraveno v
    `2c0c5b4`). Kompletní disposition: [assessment](../c06/assessment-holy-trio.md#owner-disposition).
-6. **Otevřené:** opravy zatím nemají týmové review a nejsou v `master` (I-01, akce P1). Ve statusu proto nejsou „hotové
-   a integrované“.
+6. **Otevřené:** opravy jsou v [PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12), ale zatím nemají
+   týmové review a nejsou v `master` (I-01, akce P1). Ve statusu proto nejsou „hotové a integrované“.
 
 ---
 

@@ -202,7 +202,8 @@ Result: VERIFIED FINDING
 ## Owner disposition
 
 *Vyplnil hodnocený tým (BookerDoc) 3. 11. 2026, C07. Nálezy jsme reprodukovali na assessed baseline `1b3c1fb`
-a opravy ověřili na větvi `codex/c07-c08-cp1-review` (tag `c08-reporting-baseline`). Postup a výstupy:
+a opravy ověřili na větvi `codex/c07-c08-cp1-review` (tag `c08-reporting-baseline`,
+[PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12)). Postup a výstupy:
 [c07-c06-findings-verification.txt](../evidence/c07-c06-findings-verification.txt), souhrn v
 [evidence-and-evolution.md § C07](../evidence-and-evolution.md#c07--vypořádání-c06-findings).*
 

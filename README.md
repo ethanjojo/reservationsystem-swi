@@ -106,7 +106,7 @@ Validní availability mimo pracovní okno vrací false. Notifikace po přechodu 
 
 ## Review a omezení
 
-Historie PR: CP1 #4 → v0.1 #5 → v0.2 #6 → integrace #7 → C03 #9 → C05 #10; C07/C08 změny jsou na větvi `codex/c07-c08-cp1-review`.
+Historie PR: CP1 #4 → v0.1 #5 → v0.2 #6 → integrace #7 → C03 #9 → C05 #10; C07/C08 změny jsou v [PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12).
 C01 je uzavřený. Snapshoty `c02-v0.1`, `c02-v0.2`, `c03-architecture`, `c05-detailed-design` a `c08-reporting-baseline`
 zachovávají jednotlivé verze; tag nenahrazuje týmové schválení.
 Pro spuštění historické v0.1 použijte samostatnou databázi, nikoli downgrade databáze migrované na v0.2.

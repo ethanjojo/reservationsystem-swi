@@ -7,7 +7,7 @@ Prostředí: Windows 11 Pro 10.0.26200, Node 24.19.0 / npm 11.17.0 (přenosný b
            Systémový Node 20.17.0 projekt odmítne: `npm ci` → EBADENGINE (engines >=24 <25, engine-strict=true).
 
 Baseline C06 (hodnocená): master 1b3c1fb (merge PR #10) = tag c05-detailed-design
-Nová verze: větev codex/c07-c08-cp1-review, tag c08-reporting-baseline (lokálně, zatím nepushnuto)
+Nová verze: větev codex/c07-c08-cp1-review, tag c08-reporting-baseline, PR #12 (čeká na review)
 
 0) Reprodukce baseline 1b3c1fb bez změn
    npm test           -> Test Files 5 passed (5), Tests 120 passed (120)

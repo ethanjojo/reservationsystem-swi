@@ -288,7 +288,7 @@ Návrh `d8396a3` → tests `d1bf1bd` → implementation `3967202` → tato evide
 
 **Dvě verze, dvě role.**
 - **C06 assessed baseline:** `1b3c1fb` (merge PR #10, obsahově = tag `c05-detailed-design`). Hodnotil tým Holy Trio 26. 10. 2026. Viz [assessment s owner disposition](c06/assessment-holy-trio.md).
-- **Reporting baseline C08:** tag `c08-reporting-baseline` na větvi `codex/c07-c08-cp1-review`. Opravy jsou v commitech `77f235d` (testy F1, F3) a `2c0c5b4` (pohledy C03 a ADR-007, F2). K 3. 11. 2026 je větev **jen lokální, nepushnutá a bez týmového review**.
+- **Reporting baseline C08:** tag `c08-reporting-baseline` na větvi `codex/c07-c08-cp1-review`. Opravy jsou v commitech `77f235d` (testy F1, F3) a `2c0c5b4` (pohledy C03 a ADR-007, F2). Větev je od 3. 11. 2026 na GitHubu v [PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12), který **čeká na review jiným členem a merge**.
 
 **Prostředí ověření:** Windows 11, Node 24.19.0 / npm 11.17.0, Docker Desktop 28.0.1, PostgreSQL 17.9 z `compose.yaml`. Na tomto stroji běží systémový Node 20.17.0 a `npm ci` s ním skončí `EBADENGINE`. Použili jsme proto přenosný Node 24.19.0 (viz R-01).
 
@@ -305,7 +305,7 @@ Návrh `d8396a3` → tests `d1bf1bd` → implementation `3967202` → tato evide
 **Výsledek na reporting baseline:** `npm test` **124/124** ([c07-tests.txt](evidence/c07-tests.txt)), `npm run test:unit` **75/75** ([c07-unit-tests.txt](evidence/c07-unit-tests.txt)), `npm run typecheck` a `npm run build` exit 0. Žádný kandidát nebyl zamítnut. Body ze sekce „Scope check“ v assessmentu (autentizace, reálný e-mail, coverage…) nepřebíráme jako nové povinnosti C01–C05; jsou to rizika R-06 a R-07 níže.
 
 **Otevřené issues (již nastalé problémy, nejde o rizika):**
-- **I-01** Opravy F1–F3 nejsou na GitHubu, nemají review a nejsou v `master`. Push zatím vědomě odložen. → Owner: Štěpán Rychlý; PR, review jiným členem a merge do 6. 11. 2026.
+- **I-01** Opravy F1–F3 jsou od 3. 11. v [PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12), ale nemají review a nejsou v `master`. → Owner: Štěpán Rychlý; review jiným členem (návrh D. Krásný) a merge do 6. 11. 2026.
 - **I-02** Specifikace v0.2 stále uvádí týmové schválení jako **PENDING** ([v02.md](c02/v02.md), stav). → Owner: Jan Horák; zaznamenat schválení v review a upravit stav do 10. 11. 2026.
 - **I-03** V repozitáři není žádný C04 artefakt (quality concern, criterion, measurement). C06 jej hodnotilo jako N/A, protože C04 nebylo týmovým odevzdáním. Pokud cvičící potvrdí opak, mění se na otevřenou mezeru. → Owner: Štěpán Rychlý; ověřit u cvičícího do 10. 11. 2026.
 - **I-04 (vyřešeno)** Systémový Node 20.17.0 na stroji Š. Rychlého neprojde `engine-strict`. Vyřešeno přenosným Node 24.19.0 a doplněnou sekcí README.
@@ -337,15 +337,15 @@ Klasifikace podle zadání: L × I, kde 1–2 = LOW, 3–4 = MEDIUM, 6–9 = HIG
 - **Monitoring, trigger, contingency, další review:** Trigger: změna `package.json`, `compose.yaml`, migrací nebo verze Node; selhání CI „Project checks“; čistý clone u kohokoli selže. Review na C08 (10. 11.) a týden před CP2.
 
 ### R-02
-- **Popis rizika:** Většinu implementace psal jeden člen: 32 ze 41 commitů v historii je od Jana Horáka (C01, C02, C05), Š. Rychlý má 4 (C03), D. Krásný 2 merge. → Při jeho nedostupnosti před obhajobou ostatní neobhájí nebo nezmění Lifecycle, DB constraint a outbox. → Hodnocení „Engineering Review & Defence“ (společné pro tým) a dodávka CP2 se zhorší.
+- **Popis rizika:** Většinu implementace psal jeden člen: 32 ze 41 commitů v historii je od Jana Horáka (C01, C02, C05), Š. Rychlý má 4 (C03), D. Krásný 2 merge. → Při jeho nedostupnosti před CP2 ostatní neobhájí nebo nezmění Lifecycle, DB constraint a outbox. → Hodnocení „Engineering Review & Defence“ (společné pro tým) a dodávka CP2 se zhorší.
 - **Kategorie:** People / Resources.
 - **Počáteční riziko (L/I/priorita/důvod):** L=2, I=3 → HIGH (6). L=2: kumulace znalostí je doložená `git log`, ale nepřítomnost zatím nenastala. I=3: ohrožuje společnou obhajobu i dodávku.
 - **Strategie ošetření a zdůvodnění:** MITIGATE. Zastupitelnost zvýšíme sdílením částí obhajoby a křížovým review.
-- **Opatření, vlastník, termín:** Rozdělit části A tak, aby každý vedl jiný krok a živě spustil jeho evidenci (Jan: architektura a ADR; Štěpán: C06 findings a mutanti; Daniel: verifikace a čistý build). Zkouška celé obhajoby na týmové schůzce. Owner Jan Horák, do 9. 11. 2026. PR z C07 zrecenzuje člen, který ho nepsal.
-- **Důkaz účinnosti a stav ověření:** NOT VERIFIED. Zatím existuje jen rozdělení v [technical-design-review.md](c08/technical-design-review.md); zkouška ani review neproběhly.
+- **Opatření, vlastník, termín:** Předání znalostí: Daniel a Štěpán sami spustí a vysvětlí Lifecycle, DB constraint a outbox (Jan je provede a odpoví na dotazy). Owner Jan Horák, do 10. 11. 2026. Části obhajoby A jsou rozdělené mezi všechny tři členy. PR #12 zrecenzuje člen, který ho nepsal.
+- **Důkaz účinnosti a stav ověření:** NOT VERIFIED. Zatím existuje jen rozdělení v [technical-design-review.md](c08/technical-design-review.md); předání znalostí ani review PR #12 neproběhly.
 - **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
 - **Skutečné reziduální riziko / NOT VERIFIED:** NOT VERIFIED.
-- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Po zkoušce přijme tým (Jan Horák). Contingency: každý krok A má v dokumentu přesné příkazy a odkazy, takže ho může přednést kdokoli.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Po předání znalostí přijme tým (Jan Horák). Contingency: každý krok A má v dokumentu přesné příkazy a odkazy, takže ho může přednést kdokoli.
 - **Monitoring, trigger, contingency, další review:** Trigger: člen nemůže být na C08/CP2; více než 80 % commitů nové práce od jednoho autora; PR bez review jiným členem. Review na C08.
 
 ### R-03
@@ -373,16 +373,16 @@ Klasifikace podle zadání: L × I, kde 1–2 = LOW, 3–4 = MEDIUM, 6–9 = HIG
 - **Monitoring, trigger, contingency, další review:** Trigger: připomínka cvičícího k Approval nebo nové zadání CP2 měnící schvalování. Review na C08.
 
 ### R-05
-- **Popis rizika:** Práce vzniká na dlouho žijících lokálních větvích a integruje se pozdě: C03 větev byla mergnuta 12. 10., šest dní po dokončení; v C02 byla nutná samostatná integrační oprava (PR #7); 3. 11. byl lokální `master` u Š. Rychlého 10 commitů pozadu; C07 opravy jsou zatím jen lokálně (I-01). → Změny C07/C08 se střetnou s další prací. → Konflikty a regrese těsně před C08 nebo CP2.
+- **Popis rizika:** Práce vzniká na dlouho žijících lokálních větvích a integruje se pozdě: C03 větev byla mergnuta 12. 10., šest dní po dokončení; v C02 byla nutná samostatná integrační oprava (PR #7); 3. 11. byl lokální `master` u Š. Rychlého 10 commitů pozadu; C07 opravy čekají v PR #12 na review (I-01). → Změny C07/C08 se střetnou s další prací. → Konflikty a regrese těsně před C08 nebo CP2.
 - **Kategorie:** Schedule / Integration.
 - **Počáteční riziko (L/I/priorita/důvod):** L=2, I=2 → MEDIUM (4). L=2: opakovaný vzor zpožděných merge. I=2: oprava je možná, ale stojí čas před termínem.
 - **Strategie ošetření a zdůvodnění:** MITIGATE. Malé PR, merge do dvou dnů, CI jako brána.
 - **Opatření, vlastník, termín:** Push `codex/c07-c08-cp1-review`, PR s review jiným členem, zelené CI, merge a push tagu. Owner Štěpán Rychlý, do 6. 11. 2026. Před prací vždy `git fetch`.
-- **Důkaz účinnosti a stav ověření:** NOT VERIFIED (push vědomě odložen).
+- **Důkaz účinnosti a stav ověření:** Push, tag a [PR #12](https://github.com/ethanjojo/reservationsystem-swi/pull/12) hotovo 3. 11. 2026. Review a merge NOT VERIFIED.
 - **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
 - **Skutečné reziduální riziko / NOT VERIFIED:** NOT VERIFIED.
 - **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Štěpán Rychlý po merge.
-- **Monitoring, trigger, contingency, další review:** Trigger: PR otevřený déle než 2 dny, konflikt při merge, červené CI. Contingency: prezentovat z tagu `c08-reporting-baseline` a stav označit jako „not integrated“.
+- **Monitoring, trigger, contingency, další review:** Trigger: PR otevřený déle než 3 dny, konflikt při merge, červené CI. Contingency: stav označit jako „not integrated“ a mergnout nejpozději 10. 11. (rozhodne Štěpán Rychlý).
 
 ### R-06
 - **Popis rizika:** Identita je jen veřejná mapa demo tokenů z `.env.example`. → Kdyby API běželo mimo localhost (např. demo ze sdíleného stroje), mohl by kdokoli s tokenem jednat za pacienta nebo lékaře. → Neoprávněná změna rezervace a únik e-mailu pacienta.
