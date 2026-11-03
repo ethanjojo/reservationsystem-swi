@@ -1,0 +1,57 @@
+C07 — ověření C06 findings F1–F3 (mutační kontrola)
+=====================================================
+
+Datum: 2026-11-03
+Prostředí: Windows 11 Pro 10.0.26200, Node 24.19.0 / npm 11.17.0 (přenosný balík z nodejs.org, SHA256 ověřen),
+           Docker Desktop 28.0.1, PostgreSQL 17.9 (compose.yaml, služba db-test, bookerdoc_test).
+           Systémový Node 20.17.0 projekt odmítne: `npm ci` → EBADENGINE (engines >=24 <25, engine-strict=true).
+
+Baseline C06 (hodnocená): master 1b3c1fb (merge PR #10) = tag c05-detailed-design
+Nová verze: větev codex/c07-c08-cp1-review, tag c08-reporting-baseline (lokálně, zatím nepushnuto)
+
+0) Reprodukce baseline 1b3c1fb bez změn
+   npm test           -> Test Files 5 passed (5), Tests 120 passed (120)
+   npm run test:unit  -> Test Files 3 passed (3), Tests 72 passed (72)
+   Shoduje se s C06 (B2) i s docs/evidence/c05-tests.txt.
+
+1) F1 — chybí důkaz hranice BR-01/BR-02 (sousední CONFIRMED) na autoritativní vrstvě
+   Mutant (pouze testovací DB, po testu vrácen a ověřen pg_get_constraintdef):
+     ALTER TABLE "Reservation" DROP CONSTRAINT reservation_no_overlap;
+     ALTER TABLE "Reservation" ADD CONSTRAINT reservation_no_overlap EXCLUDE USING gist
+       ("doctorId" WITH =, tstzrange("startsAt", "endsAt", '[]') WITH &&) WHERE ("status" = 'CONFIRMED');
+     npm run test:integration -w @bookerdoc/api   (DATABASE_URL = TEST_DATABASE_URL)
+
+   Baseline 1b3c1fb:  Test Files 5 passed (5), Tests 120 passed (120)   -> mutant PŘEŽIL (F1 reprodukováno)
+   Po opravě:         Test Files 2 failed | 3 passed (5), Tests 2 failed | 122 passed (124) -> mutant ZABIT
+     × reservation-http.integration.test.ts > C06 F1 / BR-01+BR-02: confirm allocates intervals adjacent
+       on both sides, rejects a 15-minute overlap   (expected 200 "OK", got 409 "Conflict")
+     × reservation.integration.test.ts > enforces reservation CHECK and EXCLUDE constraints directly in PostgreSQL
+   Po obnovení '[)' celá sada zelená (viz c07-tests.txt).
+
+2) F2 — C03 pohledy G2/G3/H1/H2 a důsledky ADR-007 uvádějí neexistující authorize/decide/allocate
+   grep -n "^export" apps/api/src/reservations/lifecycle.ts
+     -> authorizeCreate, canRead, expireIfDue, reservationLifecycle, isAllocation, INITIAL_STATE, BLOCKING_STATUS (+ typy)
+   grep -rnwE "decide|allocate" apps/api/src  -> 0 výskytů
+   grep v docs na baseline -> c03/architecture.md ř. 191, 218–223, 261–266, 312–315, 370; architecture-and-decisions.md ř. 251
+   Po opravě: G2/G3/H1/H2 a ADR-007 popisují reservationLifecycle.evaluate (2 průchody); historické sekce J/K
+   zůstávají záznamem C03 commitu 1e11105 s výslovnou poznámkou na začátku dokumentu.
+
+3) F3 — DD-05 pořadí chyb ověřeno jen částečně
+   Mutant M1: kontrola START_MUST_BE_FUTURE přesunuta před kontrolu zdrojového stavu (lifecycle.ts)
+   Mutant M2: kontrola OUTSIDE_WORKING_WINDOW (schedule && !schedule.fits) přesunuta před START_MUST_BE_FUTURE
+   Spuštěno: npm run test:unit; zdroj po každém běhu obnoven a porovnán s originálem.
+
+   Baseline 1b3c1fb:  M1 -> Tests 72 passed (72)   M2 -> Tests 72 passed (72)   -> oba PŘEŽILI (F3 reprodukováno)
+   Po opravě:
+     M1 -> Tests 1 failed | 74 passed (75)
+       × C05-12 (C06 F3): DD-05 checks source state before future start
+     M2 -> Tests 2 failed | 73 passed (75)
+       × C05-12 (C06 F3): DD-05 checks future start before working window for confirm
+       × C05-12 (C06 F3): DD-05 checks future start before working window for approve
+   -> oba mutanti ZABITI.
+
+4) Závěrečný běh nové verze (bez mutantů)
+   npm test           -> Test Files 5 passed (5), Tests 124 passed (124)   [c07-tests.txt]
+   npm run test:unit  -> Test Files 3 passed (3), Tests 75 passed (75)     [c07-unit-tests.txt]
+   npm run typecheck  -> exit 0 (api + web)
+   npm run build      -> exit 0 (api tsc + Vite web)

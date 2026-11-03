@@ -1,8 +1,16 @@
-# BookerDoc — C02 baseline v0.2
+# BookerDoc — rezervace termínů u lékařů (stav C08 / CP1)
 
 Rezervace termínů u lékařů. Tým: **Jan Horák** ([ethanjojo](https://github.com/ethanjojo)),
 **Štěpán Rychlý** ([stepanrychly](https://github.com/stepanrychly)), **Daniel Krásný** ([DanielKrasny](https://github.com/DanielKrasny)).
 [Společný repozitář](https://github.com/ethanjojo/reservationsystem-swi).
+
+Normativní chování je stále [Specification Baseline v0.2](docs/c02/v02.md). Reporting baseline pro C08 je tag `c08-reporting-baseline`.
+
+## Dokumentace podle etap
+
+- C08: [Technical Design Review](docs/c08/technical-design-review.md), [Project Status Report (PPTX)](docs/c08/C08_Project_Status_BookerDoc.pptx), [registr rizik](docs/evidence-and-evolution.md#registr-rizik--c07c08).
+- C06/C07: [assessment týmu Holy Trio s naším vypořádáním](docs/c06/assessment-holy-trio.md) a [ověření nálezů F1–F3](docs/evidence-and-evolution.md#c07--vypořádání-c06-findings).
+- C03: [architektura AS-IS → TO-BE](docs/c03/architecture.md), [ADR-006 a ADR-007](docs/architecture-and-decisions.md#adr-006--doručení-potvrzovací-notifikace-transakční-outbox).
 
 ## Specifikace a schválení
 
@@ -39,6 +47,10 @@ npm run start -w @bookerdoc/api
 API poslouchá pouze na 127.0.0.1:3000 (lze změnit PORT). Starší proces na portu nejdřív ukončete.
 Frontend lze spustit `npm run dev:web`; zůstává statickým skeletonem, C02 se předvádí API.
 Na macOS bez Docker v PATH: `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"`.
+Windows (ověřeno 3. 11. 2026 čistým clone): příkazy spouštějte v Git Bash, nejdřív zapněte Docker Desktop
+(`docker version` musí ukázat Server). `node -v` musí být 24.x: kvůli `engine-strict=true` skončí `npm ci`
+se starším Node chybou `EBADENGINE` a vitest 5 ani Prisma 7 na Node 20.17 neběží. Bez možnosti instalace
+stačí rozbalit oficiální `node-v24.x-win-x64.zip` z nodejs.org a dát jeho složku na začátek `PATH`.
 Vývojová DB localhost:55432/bookerdoc; oddělená testovací DB localhost:55433/bookerdoc_test.
 Testovací runner hlídá název a odlišný cíl DB, migruje a uklízí jen vlastní syntetická data.
 `docker compose down` zachová vývojový volume, testovací tmpfs zanikne; nepřidávejte `--volumes` pro běžné zastavení.
@@ -94,8 +106,9 @@ Validní availability mimo pracovní okno vrací false. Notifikace po přechodu 
 
 ## Review a omezení
 
-Pořadí navazujících PR: CP1 #4 → v0.1 #5 → toto v0.2 PR. Po sloučení předchozího PR přesměrujte další base na master.
-C01 je uzavřený. Snapshoty `c02-v0.1` a `c02-v0.2` zachovávají obě verze; tag nenahrazuje týmové schválení.
+Historie PR: CP1 #4 → v0.1 #5 → v0.2 #6 → integrace #7 → C03 #9 → C05 #10; C07/C08 změny jsou na větvi `codex/c07-c08-cp1-review`.
+C01 je uzavřený. Snapshoty `c02-v0.1`, `c02-v0.2`, `c03-architecture`, `c05-detailed-design` a `c08-reporting-baseline`
+zachovávají jednotlivé verze; tag nenahrazuje týmové schválení.
 Pro spuštění historické v0.1 použijte samostatnou databázi, nikoli downgrade databáze migrované na v0.2.
 Produkční autentizace, UI, skutečné e-maily a garance doručení nejsou v rozsahu C02.
 Známé auditní položky Prisma z C01 jsou popsané v architektonických rozhodnutích a tímto PR se neřeší.

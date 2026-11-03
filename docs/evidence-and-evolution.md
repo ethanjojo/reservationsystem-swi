@@ -267,7 +267,7 @@ Nový kořenový příkaz `npm run test:unit` dovoluje ověřit DD bez spuštěn
 | DD-02 Validní snapshot a povinný pending deadline | YES | `isExpired`, C05-03/11; datum je vstupní precondition, ne nová validace HTTP | keep, zachovat popsanou hranici |
 | DD-03 Nové výsledky a kopie Date | YES | `expireIfDue` vrací nový objekt; pending metadata mají nové Date; C05-10 | keep |
 | DD-04 Ani dodané schedule neobchází kontrolu přechodu | YES | privátní `evaluate` vždy autorizuje, kontroluje expiry, stav a čas; C05-01/02/08 | keep; staré veřejné `decide`/`allocate` odstraněny |
-| DD-05 Jednoznačné pořadí chyb a approval větev | YES | evaluator; C05-03/06/09 | keep |
+| DD-05 Jednoznačné pořadí chyb a approval větev | YES | evaluator; C05-03/06/09 | keep — *oprava po C06 F3: na baseline `1b3c1fb` bylo pořadí INVALID_STATE → START_MUST_BE_FUTURE → OUTSIDE_WORKING_WINDOW ověřeno jen částečně, doplněn test C05-12 ([C07](#c07--vypořádání-c06-findings))* |
 | DD-06 Stavová tabulka | YES | parametrizovaných 24 kombinací C05-04 | keep |
 | DD-07 Inkluzivní 24h, striktní deadline/start | YES | C05-05/06/07, PostgreSQL expiry za zámkem | keep |
 | DD-08 Stejný snapshot/čas pro dva průchody; atomicita v Service | YES | Service vytvoří `command` jednou a podruhé přidá schedule; konečný Decision aplikuje v téže transakci; outbox integrační testy | keep |
@@ -283,3 +283,127 @@ Schedule je důvěryhodný snapshot z interní služby; Lifecycle nemůže sama 
 ### Commit/tag
 
 Návrh `d8396a3` → tests `d1bf1bd` → implementation `3967202` → tato evidence. Reprodukovatelný výsledný snapshot: tag **`c05-detailed-design`**. Tag označuje ověřený slice, nenahrazuje skutečné týmové review PR před merge.
+
+## C07 — Vypořádání C06 findings
+
+**Dvě verze, dvě role.**
+- **C06 assessed baseline:** `1b3c1fb` (merge PR #10, obsahově = tag `c05-detailed-design`). Hodnotil tým Holy Trio 26. 10. 2026. Viz [assessment s owner disposition](c06/assessment-holy-trio.md).
+- **Reporting baseline C08:** tag `c08-reporting-baseline` na větvi `codex/c07-c08-cp1-review`. Opravy jsou v commitech `77f235d` (testy F1, F3) a `2c0c5b4` (pohledy C03 a ADR-007, F2). K 3. 11. 2026 je větev **jen lokální, nepushnutá a bez týmového review**.
+
+**Prostředí ověření:** Windows 11, Node 24.19.0 / npm 11.17.0, Docker Desktop 28.0.1, PostgreSQL 17.9 z `compose.yaml`. Na tomto stroji běží systémový Node 20.17.0 a `npm ci` s ním skončí `EBADENGINE`. Použili jsme proto přenosný Node 24.19.0 (viz R-01).
+
+**Reprodukce baseline:** na `1b3c1fb` bez změn: `npm test` **120/120**, `npm run test:unit` **72/72**. Výsledek se shoduje s C06 (B2) i s C05 evidencí.
+
+**Postup pro každý nález:** Claim → Expected → Observed → Verify (reprodukce na `1b3c1fb`) → Disposition → Closure. Mutace, příkazy a výstupy jsou v [c07-c06-findings-verification.txt](evidence/c07-c06-findings-verification.txt).
+
+| C06 položka | Expected ↔ Observed | Evidence (baseline → nová verze) | Decision | Action + owner / closure |
+| --- | --- | --- | --- | --- |
+| **F1** — BR-01 + BR-02 při Confirm: navazující `[start,end)` intervaly nekolidují, autoritativně je vynucuje `reservation_no_overlap` | Expected: test prokáže, že Confirm vedle CONFIRMED uspěje. Observed: sousedství bylo ověřeno jen pro Availability (vlastní dotaz). Mutant constraintu `'[]'` přežil **120/120** | `1b3c1fb`: mutant přežil → `77f235d`: test „C06 F1 / BR-01+BR-02“ (08:30 a 09:30 → 200, 09:15 → 409) a přímý DB test sousedních CONFIRMED; mutant zabit (**2 failed / 124**) | **VERIFIED FINDING → ACCEPT.** Chyběla evidence, nikoli implementace | Štěpán Rychlý, hotovo 3. 11. **Closure VERIFIED** (mutant zabit, sada 124/124). Týmové review: NOT VERIFIED |
+| **F2** — C03 H1/H2/G2/G3 a ADR-007: Service volá `authorize → decide → allocate` | Expected: pohledy odpovídají call path. Observed: tyto funkce v `src/` neexistují (0 výskytů), skutečně se 2× volá `reservationLifecycle.evaluate` | `1b3c1fb`: grep exportů a docs → `2c0c5b4`: G2, G3, H1, H2, text pod H2 a důsledky ADR-007 přepsány; původní znění v tagu `c03-architecture` | **VERIFIED FINDING → ACCEPT.** Rozhodnutí ADR-007 platí, zastaralý byl jeho popis | Štěpán Rychlý, hotovo 3. 11. **Closure:** `grep` docs ↔ `src` sedí; review pohledů týmem NOT VERIFIED |
+| **F3** — C05 DD-05 pořadí chyb; evidence C05 tvrdila „pořadí chyb ověřeno“ | Expected: testy rozliší (a) INVALID_STATE před START_MUST_BE_FUTURE, (b) START_MUST_BE_FUTURE před OUTSIDE_WORKING_WINDOW. Observed: mutanti M1 a M2 přežili **72/72** | `1b3c1fb`: M1 i M2 přežili → `77f235d`: C05-12 (3 případy); M1 zabit 1 testem, M2 2 testy (75 unit) | **VERIFIED FINDING → ACCEPT.** Implementace odpovídá DD, evidence přeceňovala ověření | Štěpán Rychlý, hotovo 3. 11. **Closure VERIFIED** (oba mutanti zabiti). C05 evidence (řádek DD-05) a tabulka testů DD odkazují na opravu |
+
+**Výsledek na reporting baseline:** `npm test` **124/124** ([c07-tests.txt](evidence/c07-tests.txt)), `npm run test:unit` **75/75** ([c07-unit-tests.txt](evidence/c07-unit-tests.txt)), `npm run typecheck` a `npm run build` exit 0. Žádný kandidát nebyl zamítnut. Body ze sekce „Scope check“ v assessmentu (autentizace, reálný e-mail, coverage…) nepřebíráme jako nové povinnosti C01–C05; jsou to rizika R-06 a R-07 níže.
+
+**Otevřené issues (již nastalé problémy, nejde o rizika):**
+- **I-01** Opravy F1–F3 nejsou na GitHubu, nemají review a nejsou v `master`. Push zatím vědomě odložen. → Owner: Štěpán Rychlý; PR, review jiným členem a merge do 6. 11. 2026.
+- **I-02** Specifikace v0.2 stále uvádí týmové schválení jako **PENDING** ([v02.md](c02/v02.md), stav). → Owner: Jan Horák; zaznamenat schválení v review a upravit stav do 10. 11. 2026.
+- **I-03** V repozitáři není žádný C04 artefakt (quality concern, criterion, measurement). C06 jej hodnotilo jako N/A, protože C04 nebylo týmovým odevzdáním. Pokud cvičící potvrdí opak, mění se na otevřenou mezeru. → Owner: Štěpán Rychlý; ověřit u cvičícího do 10. 11. 2026.
+- **I-04 (vyřešeno)** Systémový Node 20.17.0 na stroji Š. Rychlého neprojde `engine-strict`. Vyřešeno přenosným Node 24.19.0 a doplněnou sekcí README.
+
+## Registr rizik — C07/C08
+
+Klasifikace podle zadání: L × I, kde 1–2 = LOW, 3–4 = MEDIUM, 6–9 = HIGH. Skutečné reziduální riziko uvádíme jen po ověřeném opatření, jinak **NOT VERIFIED**. Vlastníci a termíny jsou návrh z 3. 11. 2026 a tým je potvrdí na C08.
+
+| ID | Kategorie | Počáteční | Strategie | Očekávané rezid. | Skutečné rezid. |
+| --- | --- | --- | --- | --- | --- |
+| R-01 | Release / Operation | L3 × I2 = HIGH (6) | MITIGATE | L1 × I2 = LOW (2) | L2 × I2 = MEDIUM (4), ověřeno částečně |
+| R-02 | People / Resources | L2 × I3 = HIGH (6) | MITIGATE | L1 × I2 = LOW (2) | NOT VERIFIED |
+| R-03 | Technical / Quality | L3 × I3 = HIGH (9) | MITIGATE | L1 × I3 = MEDIUM (3) | L1 × I3 = MEDIUM (3), VERIFIED |
+| R-04 | Scope / Requirements | L2 × I2 = MEDIUM (4) | MITIGATE | L1 × I2 = LOW (2) | NOT VERIFIED |
+| R-05 | Schedule / Integration | L2 × I2 = MEDIUM (4) | MITIGATE | L1 × I2 = LOW (2) | NOT VERIFIED |
+| R-06 | Security / Privacy | L1 × I2 = LOW (2) | ACCEPT | L1 × I2 = LOW (2) | přijato, bez opatření |
+| R-07 | External dependency | L1 × I2 = LOW (2) | ACCEPT | L1 × I2 = LOW (2) | přijato, bez opatření |
+
+### R-01
+- **Popis rizika:** Build a testy byly ověřovány hlavně v prostředí autora (macOS, Node 24, běžící Docker) a README neuvádí specifika jiných OS → na jiném stroji projekt nenaběhne (jiný Node, vypnutý Docker, nedostupné stažení Prisma enginu) → zdrží se integrace a hrozí nefunkční živé demo při obhajobě CP1/CP2.
+- **Kategorie:** Release / Operation.
+- **Počáteční riziko (L/I/priorita/důvod):** L=3, I=2 → HIGH (6). L=3, protože problém už nastal dvakrát: hodnotitelé C06 nestáhli migrační engine a migrace aplikovali ručně, a 3. 11. na Windows stroji Š. Rychlého odmítl `npm ci` systémový Node 20.17 (`EBADENGINE`) a Docker neběžel. I=2, protože obnova je realistická v řádu hodin, ale ohrožuje demo.
+- **Strategie ošetření a zdůvodnění:** MITIGATE. Prostředí nelze zrušit (AVOID), PostgreSQL constraint je jádrem BR-02. Snížíme pravděpodobnost ověřeným postupem na dalších strojích.
+- **Opatření, vlastník, termín:** (1) README: sekce pro Windows, kontrola Node 24 a Dockeru. Owner Štěpán Rychlý, hotovo 3. 11. (2) Čistý `git clone` a kroky README na stroji jiného člena než autor. Owner Štěpán Rychlý, hotovo 3. 11. (3) Totéž na stroji Daniela Krásného, který se použije jako záloha pro demo. Owner Daniel Krásný, do 9. 11. 2026.
+- **Důkaz účinnosti a stav ověření:** (1) a (2) VERIFIED: čistý clone `2c0c5b4` na Windows, `npm ci` → `npm test` 124/124, typecheck i build prošly ([c07-clean-clone-windows.txt](evidence/c07-clean-clone-windows.txt)). (3) NOT VERIFIED.
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2), pokud projde i stroj (3).
+- **Skutečné reziduální riziko / NOT VERIFIED:** L=2, I=2 → MEDIUM (4). Ověřen jeden další stroj a OS; stroj pro obhajobu zatím ověřen není.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Po splnění bodu (3) přijme LOW Jan Horák (repozitář vlastní). Contingency: demo z ověřeného stroje Š. Rychlého a předem uložené výstupy testů v `docs/evidence/`.
+- **Monitoring, trigger, contingency, další review:** Trigger: změna `package.json`, `compose.yaml`, migrací nebo verze Node; selhání CI „Project checks“; čistý clone u kohokoli selže. Review na C08 (10. 11.) a týden před CP2.
+
+### R-02
+- **Popis rizika:** Většinu implementace psal jeden člen: 32 ze 41 commitů v historii je od Jana Horáka (C01, C02, C05), Š. Rychlý má 4 (C03), D. Krásný 2 merge. → Při jeho nedostupnosti před obhajobou ostatní neobhájí nebo nezmění Lifecycle, DB constraint a outbox. → Hodnocení „Engineering Review & Defence“ (společné pro tým) a dodávka CP2 se zhorší.
+- **Kategorie:** People / Resources.
+- **Počáteční riziko (L/I/priorita/důvod):** L=2, I=3 → HIGH (6). L=2: kumulace znalostí je doložená `git log`, ale nepřítomnost zatím nenastala. I=3: ohrožuje společnou obhajobu i dodávku.
+- **Strategie ošetření a zdůvodnění:** MITIGATE. Zastupitelnost zvýšíme sdílením částí obhajoby a křížovým review.
+- **Opatření, vlastník, termín:** Rozdělit části A tak, aby každý vedl jiný krok a živě spustil jeho evidenci (Jan: architektura a ADR; Štěpán: C06 findings a mutanti; Daniel: verifikace a čistý build). Zkouška celé obhajoby na týmové schůzce. Owner Jan Horák, do 9. 11. 2026. PR z C07 zrecenzuje člen, který ho nepsal.
+- **Důkaz účinnosti a stav ověření:** NOT VERIFIED. Zatím existuje jen rozdělení v [technical-design-review.md](c08/technical-design-review.md); zkouška ani review neproběhly.
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
+- **Skutečné reziduální riziko / NOT VERIFIED:** NOT VERIFIED.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Po zkoušce přijme tým (Jan Horák). Contingency: každý krok A má v dokumentu přesné příkazy a odkazy, takže ho může přednést kdokoli.
+- **Monitoring, trigger, contingency, další review:** Trigger: člen nemůže být na C08/CP2; více než 80 % commitů nové práce od jednoho autora; PR bez review jiným členem. Review na C08.
+
+### R-03
+- **Popis rizika:** Testy nechránily kritické hranice: C06 ukázalo tři přeživší mutanty (F1 `'[]'` v BR-02, F3 M1 a M2 v DD-05). → Regrese invariantu BR-02 nebo změna HTTP kontraktu (400 místo 409) projde zeleným CI. → Porušení jádrového invariantu nebo neobhajitelná evidence při CP1/CP2.
+- **Kategorie:** Technical / Quality.
+- **Počáteční riziko (L/I/priorita/důvod):** L=3, I=3 → HIGH (9). L=3: tři mutanti na `1b3c1fb` skutečně přežili. I=3: BR-02 je hlavní business invariant.
+- **Strategie ošetření a zdůvodnění:** MITIGATE. Doplníme cílené testy hranic a jejich účinnost doložíme mutací, ne pouhým počtem testů.
+- **Opatření, vlastník, termín:** Testy F1 (HTTP i DB) a C05-12, commit `77f235d`. Owner Štěpán Rychlý, hotovo 3. 11. 2026. Při každé změně `lifecycle.ts` nebo migrací znovu spustit trojici mutantů.
+- **Důkaz účinnosti a stav ověření:** VERIFIED: všichni tři mutanti jsou na nové verzi zabiti ([c07-c06-findings-verification.txt](evidence/c07-c06-findings-verification.txt)), sada 124/124 a 75/75.
+- **Očekávané reziduální riziko:** L=1, I=3 → MEDIUM (3). Dopad zůstává vysoký, systematická mutační analýza ostatních hranic neproběhla.
+- **Skutečné reziduální riziko / NOT VERIFIED:** L=1, I=3 → MEDIUM (3), VERIFIED pro známé mutanty.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** MEDIUM přijímá Štěpán Rychlý: známé mezery jsou uzavřené, další hranice (BR-03 24h, BR-08 deadline) testy na přesné ms už mají.
+- **Monitoring, trigger, contingency, další review:** Trigger: nový nález hodnotitele nebo cvičícího, změna constraintu či pořadí v `evaluate`, přeživší mutant. Review před CP2.
+
+### R-04
+- **Popis rizika:** Politika neblokujícího PENDING_APPROVAL a platnosti min(24 h, start) je schválená zadavatelem, ale týmové schválení je v dokumentaci stále PENDING (I-02). → Tým nebo cvičící ji při obhajobě či v CP2 zpochybní. → Přepracování Approval toku, testů a diagramů na poslední chvíli.
+- **Kategorie:** Scope / Requirements.
+- **Počáteční riziko (L/I/priorita/důvod):** L=2, I=2 → MEDIUM (4). L=2: stav PENDING je otevřený od 22. 9. I=2: změna by zasáhla REQ-07 až REQ-11, ale obnova je realistická.
+- **Strategie ošetření a zdůvodnění:** MITIGATE. Rozhodnutí explicitně zaznamenáme.
+- **Opatření, vlastník, termín:** Schválení v PR review a úprava stavu ve [v02.md](c02/v02.md). Owner Jan Horák, do 10. 11. 2026.
+- **Důkaz účinnosti a stav ověření:** NOT VERIFIED.
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
+- **Skutečné reziduální riziko / NOT VERIFIED:** NOT VERIFIED.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Jan Horák po záznamu schválení.
+- **Monitoring, trigger, contingency, další review:** Trigger: připomínka cvičícího k Approval nebo nové zadání CP2 měnící schvalování. Review na C08.
+
+### R-05
+- **Popis rizika:** Práce vzniká na dlouho žijících lokálních větvích a integruje se pozdě: C03 větev byla mergnuta 12. 10., šest dní po dokončení; v C02 byla nutná samostatná integrační oprava (PR #7); 3. 11. byl lokální `master` u Š. Rychlého 10 commitů pozadu; C07 opravy jsou zatím jen lokálně (I-01). → Změny C07/C08 se střetnou s další prací. → Konflikty a regrese těsně před C08 nebo CP2.
+- **Kategorie:** Schedule / Integration.
+- **Počáteční riziko (L/I/priorita/důvod):** L=2, I=2 → MEDIUM (4). L=2: opakovaný vzor zpožděných merge. I=2: oprava je možná, ale stojí čas před termínem.
+- **Strategie ošetření a zdůvodnění:** MITIGATE. Malé PR, merge do dvou dnů, CI jako brána.
+- **Opatření, vlastník, termín:** Push `codex/c07-c08-cp1-review`, PR s review jiným členem, zelené CI, merge a push tagu. Owner Štěpán Rychlý, do 6. 11. 2026. Před prací vždy `git fetch`.
+- **Důkaz účinnosti a stav ověření:** NOT VERIFIED (push vědomě odložen).
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
+- **Skutečné reziduální riziko / NOT VERIFIED:** NOT VERIFIED.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Štěpán Rychlý po merge.
+- **Monitoring, trigger, contingency, další review:** Trigger: PR otevřený déle než 2 dny, konflikt při merge, červené CI. Contingency: prezentovat z tagu `c08-reporting-baseline` a stav označit jako „not integrated“.
+
+### R-06
+- **Popis rizika:** Identita je jen veřejná mapa demo tokenů z `.env.example`. → Kdyby API běželo mimo localhost (např. demo ze sdíleného stroje), mohl by kdokoli s tokenem jednat za pacienta nebo lékaře. → Neoprávněná změna rezervace a únik e-mailu pacienta.
+- **Kategorie:** Security / Privacy.
+- **Počáteční riziko (L/I/priorita/důvod):** L=1, I=2 → LOW (2). L=1: API poslouchá jen na 127.0.0.1 a nasazení se neplánuje. I=2: data jsou syntetická.
+- **Strategie ošetření a zdůvodnění:** ACCEPT. Produkční autentizace není povinností C01–C05 a C06 ji vědomě nehodnotilo.
+- **Opatření, vlastník, termín:** Žádné. Omezení je uvedené v README.
+- **Důkaz účinnosti a stav ověření:** N/A (přijato bez opatření).
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
+- **Skutečné reziduální riziko / NOT VERIFIED:** LOW (2), přijato.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Jan Horák: demo běží lokálně se syntetickými daty.
+- **Monitoring, trigger, contingency, další review:** Trigger: plán vystavit API mimo localhost nebo použít reálná osobní data. Pak ADR k identitě.
+
+### R-07
+- **Popis rizika:** Notifikace jde přes stub. Outbox doručuje at-least-once a stav `FAILED` nikdo nesleduje. → Při napojení reálného dodavatele potvrzení nedorazí nebo dorazí dvakrát a nikdo si toho nevšimne. → Pacient nemá potvrzení termínu.
+- **Kategorie:** External dependency.
+- **Počáteční riziko (L/I/priorita/důvod):** L=1, I=2 → LOW (2). L=1: reálný dodavatel se pro CP1 nepoužívá. I=2: stav rezervace zůstává správný (ADR-006).
+- **Strategie ošetření a zdůvodnění:** ACCEPT. Vědomý kompromis ADR-006, mimo povinnosti C01–C05.
+- **Opatření, vlastník, termín:** Žádné pro CP1.
+- **Důkaz účinnosti a stav ověření:** N/A. Retry i FAILED ověřují integrační testy outboxu se stubem.
+- **Očekávané reziduální riziko:** L=1, I=2 → LOW (2).
+- **Skutečné reziduální riziko / NOT VERIFIED:** LOW (2), přijato.
+- **Přijetí reziduálního rizika, vlastník, zdůvodnění:** Štěpán Rychlý (autor ADR-006).
+- **Monitoring, trigger, contingency, další review:** Trigger: požadavek na reálný e-mail v CP2 nebo první řádek `FAILED` v dev DB. Pak monitoring a deduplikace podle `reservationId`.

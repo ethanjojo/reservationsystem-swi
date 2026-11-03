@@ -1,0 +1,30 @@
+C07 / R-01 — čistý clone a kroky z README na druhém stroji (jiný člen týmu než autor, jiný OS)
+==========================================================================================
+
+Kdo/kde: Štěpán Rychlý, Windows 11 Pro 10.0.26200, Git Bash. Dosud se projekt ověřoval na macOS u autora
+         (C01: macOS arm64, Docker Desktop 4.44.3).
+Kdy:     2026-11-03 09:40:32 → 09:42:36 (+01:00)
+Nástroje: Node v24.19.0 / npm 11.17.0 (přenosný oficiální zip z nodejs.org, SHA256 ověřen proti SHASUMS256.txt),
+          Docker Desktop, server 28.0.1, postgres:17.9-alpine z compose.yaml.
+Výchozí stav stroje: systémový Node v20.17.0 / npm 10.8.3 → `npm ci --dry-run`:
+          npm error code EBADENGINE ... Required: {"node":">=24 <25","npm":">=11 <12"} Actual: {"npm":"10.8.3","node":"v20.17.0"}
+          Docker Desktop nebyl spuštěný (docker version: dockerDesktopLinuxEngine pipe not found).
+
+Postup: git clone <repo> do prázdného adresáře, git checkout 2c0c5b4 (kód shodný s c08-reporting-baseline;
+        pozdější commity mění jen dokumentaci), pak přesně kroky README v tomto pořadí:
+
+  == STEP: npm ci                         → added 836 packages, audited 839 packages in 1m      EXIT 0
+  == STEP: cp .env.example .env                                                                EXIT 0
+  == STEP: docker compose up -d --wait                                                         EXIT 0
+  == STEP: npm run db:migrate                                                                  EXIT 0
+  == STEP: npm run db:seed                                                                     EXIT 0
+  == STEP: npm test                       → Test Files 5 passed (5), Tests 124 passed (124)     EXIT 0
+  == STEP: npm run typecheck                                                                   EXIT 0
+  == STEP: npm run build                                                                       EXIT 0
+
+Omezení (nezamlčujeme):
+- Čistý byl checkout, node_modules a .env. DB kontejnery ne: compose projekt má pevné jméno `bookerdoc`,
+  takže clone použil kontejnery, které už běžely pro pracovní kopii. Migrace na nich již byly aplikované,
+  ale testovací DB je tmpfs a testy si data vytvářejí samy.
+- Node 24 nebyl nainstalován systémově, ale přidán do PATH z přenosného balíku (postup je nyní v README).
+- Ověřil jeden další stroj. Stroj pro obhajobu / Danielův stroj zatím NOT VERIFIED (R-01, akce P2).
