@@ -248,12 +248,17 @@ začne zatěžovat hlavní DB, nebo dodavatel nabídne transakční/idempotentn�
 **Důvod:** statechart v0.2 má v kódu právě jednoho vlastníka; přechody jsou testovatelné bez databáze;
 expirace a oprávnění mají jedinou definici; pravidlo lze strojově ověřit (status literály jen v `lifecycle.ts`).
 
-**Přijaté negativní důsledky:** alokace se rozhoduje ve dvou krocích (`decide` → `needsSchedule` → `allocate`),
-protože pracovní okna jsou I/O; autoritativní kontrola kolize zůstává v DB constraintu, nikoli v Lifecycle;
+**Přijaté negativní důsledky:** alokace se rozhoduje ve dvou průchodech jedné policy (`evaluate` → `needsSchedule` →
+`evaluate` se schedule; C05 DD-04/08), protože pracovní okna jsou I/O; autoritativní kontrola kolize zůstává v DB constraintu, nikoli v Lifecycle;
 `ReservationError` nese HTTP status i v doménovém modulu (známý kompromis, odděleno později).
 
 **Rozhodnutí znovu otevřeme, když:** přechody začnou vyžadovat data, která nejde předat jako vstup (např. kapacitní
 Resource), nebo vznikne druhý zapisovatel stavu mimo Reservation Service (job, jiná služba).
+
+**Aktualizace 2026-11-03 (C06 F2):** rozhodnutí B platí beze změny. C05 nahradil původní tři veřejné funkce
+`authorize` / `decide` / `allocate` jedním hlídaným kontraktem `LifecyclePolicy.evaluate`. Důsledky výše a pohledy
+[C03 G2/G3/H1/H2](c03/architecture.md#g2-to-be-statická-architektura) jsme proto přepsali na skutečný call path;
+původní znění je v tagu `c03-architecture`.
 
 ## C05 Detailed Design
 
@@ -433,6 +438,7 @@ sequenceDiagram
 | --- | --- | --- | --- |
 | DD-01/04 veřejný kontrakt | schedule nedovoluje obejít roli ani zdrojový stav | unit | C05-01 cizí aktér + validní schedule odmítnut; C05-02 DRAFT+approve a terminální+confirm odmítnuty |
 | DD-05 pořadí | cizí aktér nedostane expiry rozhodnutí ani po deadline | unit | C05-03 FORBIDDEN před expiry; chybějící interní deadline neodhalit cizímu |
+| DD-05 pořadí (doplněno po C06 F3) | INVALID_STATE před START_MUST_BE_FUTURE; START_MUST_BE_FUTURE před OUTSIDE_WORKING_WINDOW | unit | C05-12 minulý start + nepovolený stav; start = now + `fits=false` pro Confirm i Approve |
 | DD-06 state table | všechny 24 kombinace dávají definovaný výsledek | unit | C05-04 explicitní tabulka zdrojového stavu × operace |
 | DD-07 časové hranice | 24h inkluzivně, deadline/start striktně | unit | C05-05 přesně 24h a minus1ms; C05-06 deadline minus1ms/exact; C05-07 start exact/past |
 | DD-04 schedule collaboration | první průchod needsSchedule, druhý konečná změna | unit | C05-08 noSchedule + current facts, false fits odmítnuto |

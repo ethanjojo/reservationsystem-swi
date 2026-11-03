@@ -7,6 +7,11 @@ Sledovaný scénář: **Confirm → odložené Approve Reservation s potvrzovac�
 Rozhodnutí: [ADR-006](../architecture-and-decisions.md#adr-006--doručení-potvrzovací-notifikace-transakční-outbox) a
 [ADR-007](../architecture-and-decisions.md#adr-007--jediný-vlastník-přechodů-životního-cyklu-reservation).
 
+> **Aktualizace 2026-11-03 (C06 finding F2):** pohledy G2, G3, H1, H2 a text pod H2 nyní popisují skutečný call path po C05:
+> Reservation Service volá dvakrát jediný veřejný kontrakt `reservationLifecycle.evaluate(command)` (podruhé se `schedule`).
+> Původní C03 podoba s `authorize` / `decide` / `allocate` je zachovaná v tagu `c03-architecture`. Sekce J, K a L zůstávají
+> záznamem C03 změny (commit `1e11105`), proto v nich původní názvy funkcí ponecháváme.
+
 ## B. Architektonické drivery
 
 | # | Podklad / zdroj | Proč ovlivňuje architekturu | Otázka, kterou musí architektura vyřešit |
@@ -188,7 +193,7 @@ flowchart TB
   NS["Notification Service (external)"]
   API -- "resolve(token)" --> IDN
   API -- "createDraft / checkAvailability / changeReservation / readReservation" --> SVC
-  SVC -- "authorize / decide / allocate" --> LC
+  SVC -- "evaluate(command) – 1. průchod, 2. průchod se schedule" --> LC
   SVC -- "scheduleInterval" --> AV
   SVC -- "enqueueConfirmation(tx)" --> OB
   SVC -- "lock / load / update (tx)" --> DBM
@@ -215,12 +220,12 @@ Statechart v0.2 se nemění (stejné stavy i přechody); doplňujeme vlastníka 
 | Přechod | Owner rozhodnutí | Kdo může transition pouze vyžádat |
 |---|---|---|
 | [*] → DRAFT | Reservation Lifecycle (`INITIAL_STATE`) po validaci Scheduling | Pacient přes Reservation API |
-| DRAFT → PENDING_APPROVAL | Reservation Lifecycle (`allocate`, podle `requiresApproval`) | Pacient |
-| DRAFT → CONFIRMED | Reservation Lifecycle (`allocate`); kolizi autoritativně Persistence constraint | Pacient |
-| PENDING_APPROVAL → CONFIRMED | Reservation Lifecycle (`decide` + `allocate`); kolizi Persistence constraint | Lékař daného zdroje |
-| PENDING_APPROVAL → REJECTED | Reservation Lifecycle (`decide`) | Lékař daného zdroje |
-| PENDING_APPROVAL → CANCELLED, DRAFT/CONFIRMED → CANCELLED | Reservation Lifecycle (`decide`, BR-03) | Pacient |
-| PENDING_APPROVAL → EXPIRED | Reservation Lifecycle (`decide` / `expireIfDue`, BR-08); materializuje Reservation Service při autorizované interakci | nikdo — časová událost |
+| DRAFT → PENDING_APPROVAL | Reservation Lifecycle (`evaluate` se schedule, podle `requiresApproval`) | Pacient |
+| DRAFT → CONFIRMED | Reservation Lifecycle (`evaluate` se schedule); kolizi autoritativně Persistence constraint | Pacient |
+| PENDING_APPROVAL → CONFIRMED | Reservation Lifecycle (`evaluate` → `needsSchedule` → `evaluate` se schedule); kolizi Persistence constraint | Lékař daného zdroje |
+| PENDING_APPROVAL → REJECTED | Reservation Lifecycle (`evaluate`) | Lékař daného zdroje |
+| PENDING_APPROVAL → CANCELLED, DRAFT/CONFIRMED → CANCELLED | Reservation Lifecycle (`evaluate`, BR-03) | Pacient |
+| PENDING_APPROVAL → EXPIRED | Reservation Lifecycle (`evaluate` → `expire` / `expireIfDue` pro čtení, BR-08); materializuje Reservation Service při autorizované interakci | nikdo — časová událost |
 | Outbox PENDING → SENT / PENDING (retry) / FAILED | Notification Outbox (dispatcher) | nikdo — vzniká jen jako důsledek přechodu do CONFIRMED |
 
 ## G4. Runtime / deployment mapping
@@ -258,13 +263,13 @@ sequenceDiagram
   L->>API: POST /reservations/{id}/approve
   API->>SVC: changeReservation(id, actor, "approve")
   SVC->>DB: BEGIN + SELECT … FOR UPDATE
-  SVC->>LC: authorize(actor, row, "approve")
-  SVC->>LC: decide(row, "approve", now)
-  LC-->>SVC: needsSchedule (PENDING_APPROVAL, now < expiresAt)
-  SVC->>AV: scheduleInterval(row, now)
+  SVC->>SVC: time = now() po zámku (BR-06)
+  SVC->>LC: evaluate({row, actor, "approve", time})
+  LC-->>SVC: needsSchedule (oprávnění, now < expiresAt, PENDING_APPROVAL, budoucí start ověřeny)
+  SVC->>AV: scheduleInterval(tx, row, time, row.endsAt)
   AV-->>SVC: fits, requiresApproval, doctor, service
-  SVC->>LC: allocate(row, "approve", now, schedule)
-  LC-->>SVC: StateChange{status: CONFIRMED}
+  SVC->>LC: evaluate({row, actor, "approve", time, schedule})
+  LC-->>SVC: change{status: CONFIRMED} (všechny guards znovu + fits)
   SVC->>DB: UPDATE Reservation SET status = CONFIRMED
   alt bez kolize
     SVC->>OB: enqueueConfirmation(tx, message, now)
@@ -309,11 +314,15 @@ classDiagram
     +INITIAL_STATE: StateChange
     +BLOCKING_STATUS
     +authorizeCreate(actor, patientId)
-    +authorize(actor, row, op)
     +canRead(actor, row) bool
-    +decide(row, op, time) Decision
-    +allocate(row, op, time, schedule) StateChange
+    +evaluate(command) Decision
     +expireIfDue(row, time) StateChange?
+    +isAllocation(change) bool
+  }
+  class TransitionCommand {
+    <<value object>>
+    row; actor; operation; time
+    schedule?
   }
   class Decision {
     <<union>>
@@ -358,6 +367,7 @@ classDiagram
   ReservationService ..> ReservationLifecycle : rozhodnutí
   ReservationService ..> SchedulingAvailability : interval, okna
   ReservationService ..> NotificationOutbox : enqueue v tx
+  ReservationLifecycle ..> TransitionCommand : vstup
   ReservationLifecycle ..> Decision
   ReservationLifecycle ..> StateChange
   ReservationLifecycle ..> Actor
@@ -367,8 +377,8 @@ classDiagram
   SchedulingAvailability ..> ReservationLifecycle : BLOCKING_STATUS
 ```
 
-Každá zpráva z H1 má vlastníka v H2: `changeReservation` → ReservationService; `authorize/decide/allocate` →
-ReservationLifecycle; `scheduleInterval` → SchedulingAvailability; `enqueueConfirmation`/dispatch →
+Každá zpráva z H1 má vlastníka v H2: `changeReservation` → ReservationService; `evaluate` (oba průchody) →
+ReservationLifecycle, v kódu exportovaná jako `reservationLifecycle: LifecyclePolicy` (C05 DD-01/04); `scheduleInterval` → SchedulingAvailability; `enqueueConfirmation`/dispatch →
 NotificationOutbox; `sendReservationConfirmation` → NotificationService.
 
 ## I. Cross-view kontrola (provedena před změnou kódu)
