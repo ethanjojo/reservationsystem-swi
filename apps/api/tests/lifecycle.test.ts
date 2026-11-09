@@ -106,6 +106,18 @@ describe("C05 LifecyclePolicy contract", () => {
     expect(() => evaluate("approve", { row: { ...row("PENDING_APPROVAL"), approvalExpiresAt: null }, schedule: fits }))
       .toThrow("Pending reservation has no deadline");
   });
+  it("C05-12 (C06 F3): DD-05 checks source state before future start", () => {
+    const past = new Date(time.getTime() - 1);
+    for (const status of ["CONFIRMED", "CANCELLED", "REJECTED"] as const) {
+      rejects(() => evaluate("confirm", { row: { ...row(status), startsAt: past }, schedule: fits }), 409, "INVALID_STATE");
+    }
+    rejects(() => evaluate("approve", { row: { ...row("DRAFT"), startsAt: past }, schedule: fits }), 409, "INVALID_STATE");
+  });
+  it.each(["confirm", "approve"] as const)("C05-12 (C06 F3): DD-05 checks future start before working window for %s", operation => {
+    const base = command(operation).row;
+    rejects(() => evaluate(operation, { row: { ...base, startsAt: time }, schedule: { fits: false, requiresApproval: true } }),
+      400, "START_MUST_BE_FUTURE");
+  });
   it("C05-05: draft cancellation stays possible after start; pending cancellation before deadline is unrestricted", () => {
     expect(evaluate("cancel", { time: new Date("2031-01-01T00:00:00Z") })).toEqual({ kind: "change", change: { status: "CANCELLED" } });
     expect(evaluate("cancel", { row: row("PENDING_APPROVAL"), time: new Date(deadline.getTime() - 1) })).toEqual({ kind: "change", change: { status: "CANCELLED" } });
